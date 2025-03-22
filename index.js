@@ -190,7 +190,7 @@ client.on('interactionCreate', async interaction => {
       }
       
       // 時間選択メニュー処理
-      if (interaction.customId.startsWith('timemenu_')) {
+      else if (interaction.customId.startsWith('timemenu_')) {
         console.log('本番時間選択を検出: ' + interaction.customId);
 
         try {
@@ -310,6 +310,7 @@ client.on('messageCreate', async message => {
     }
   }
 });
+//更新用
 
 // 新しいデバッグ用コマンド：時間フローテスト
 client.on('messageCreate', async message => {
@@ -956,7 +957,7 @@ async function showTimeAvailabilitySelection(interaction, recruitmentId, joinTyp
     ];
 
     // timeflowと同じパターンのカスタムID
-    const customId = `timemenu_${recruitmentId}`;
+    const customId = `time_availability_${recruitmentId}_${joinType}_${selectedAttributes.join(',')}`;
     console.log(`使用するカスタムID: ${customId}`);
 
     // UIコンポーネント
