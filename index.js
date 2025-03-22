@@ -1,5 +1,5 @@
 // Discord.jsの必要なクラスをインポート
-require('web-streams-polyfill/polyfill');
+//require('web-streams-polyfill/polyfill');
 
 const {
   Client,
@@ -23,7 +23,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // web-streams-polyfillのインポート
-require('web-streams-polyfill');
+//require('web-streams-polyfill');
 
 // 環境変数をロード
 require('dotenv').config();
