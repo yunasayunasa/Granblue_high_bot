@@ -190,9 +190,13 @@ client.on('interactionCreate', async interaction => {
       }
       
       // 時間選択メニュー処理
-      if (interaction.customId.startsWith('timemenu_')) {
-        console.log('本番時間選択を検出: ' + interaction.customId);
-
+    if (interaction.customId.startsWith('timemenu_')) {
+       console.log('募集作成用時間選択を検出');
+        const [_, __, raidType, date] = interaction.customId.split('_');
+        const selectedTime = interaction.values[0];
+        await confirmRecruitment(interaction, raidType, date, selectedTime);
+        return; // 処理後に早期リターン
+    }
         try {
           // deferUpdateで応答の時間を確保
           await interaction.deferUpdate();
