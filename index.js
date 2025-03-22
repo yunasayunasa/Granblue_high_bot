@@ -494,8 +494,15 @@ async function handleSelectMenuInteraction(interaction) {
   const customId = interaction.customId;
   console.log(`セレクトメニュー処理: ${customId}`);
 
+ // 先に time_select_ をチェックするように変更
+ if (customId.startsWith('time_select_')) {
+  const [_, __, raidType, date] = customId.split('_');
+  const selectedTime = interaction.values[0];
+  await confirmRecruitment(interaction, raidType, date, selectedTime);
+}
+  
   // 時間選択メニュー処理
-  if (customId.startsWith('time_')) {
+  else if (customId.startsWith('time_')) {
     try {
       console.log('時間選択処理を開始');
 
