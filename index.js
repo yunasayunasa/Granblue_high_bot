@@ -1,7 +1,6 @@
 // Discord.jsの必要なクラスをインポート
 require('web-streams-polyfill/polyfill');
 
-
 const {
   Client,
   Partials,
@@ -17,18 +16,17 @@ const {
   AttachmentBuilder
 } = require('discord.js');
 
-// グローバルなエラーハンドリングを追加（ファイルの先頭付近）
+// グローバルなエラーハンドリングを追加
 process.on('unhandledRejection', (reason, promise) => {
   console.error('未処理のPromise拒否:');
   console.error(reason);
 });
 
-// web-streams-polyfillのインポート（必要な場合）
+// web-streams-polyfillのインポート
 require('web-streams-polyfill');
 
 // 環境変数をロード
 require('dotenv').config();
-
 
 // ボットの基本設定
 const client = new Client({
@@ -39,20 +37,6 @@ const client = new Client({
     GatewayIntentBits.GuildMessageReactions
   ],
   partials: [Partials.Channel, Partials.Message, Partials.Reaction]
-});
-
-
-// ファイルの適切な場所（例：他のイベント定義の近く）に以下のコードを配置
-
-// ボットの準備完了時に実行（既存の3箇所のready処理を統合）
-client.once('ready', () => {
-  console.log(`${client.user.tag} でログインしました！`);
-  console.log('Discord.js バージョン:', require('discord.js').version);
-  console.log('デバッグモード: 有効');
-  
-  // 定期的な処理の開始
-  setInterval(saveRecruitmentData, 5 * 60 * 1000); // 5分ごとにデータ保存
-  setInterval(checkAutomaticClosing, 60 * 1000); // 1分ごとに自動締め切りチェック
 });
 
 // グローバル変数
@@ -70,11 +54,221 @@ for (let i = 0; i < 24; i++) {
   });
 }
 
+// ボットの準備完了時に実行
+client.once('ready', () => {
+  console.log(`${client.user.tag} でログインしました！`);
+  console.log('Discord.js バージョン:', require('discord.js').version);
+  console.log('デバッグモード: 有効');
+  
+  // 定期的な処理の開始
+  setInterval(saveRecruitmentData, 5 * 60 * 1000); // 5分ごとにデータ保存
+  setInterval(checkAutomaticClosing, 60 * 1000); // 1分ごとに自動締め切りチェック
+});
 
+// 募集データの保存処理
+function saveRecruitmentData() {
+  console.log('募集データを保存しています...');
+  // ここにデータ保存のロジックを実装
+  // 例: ファイルシステムやデータベースへの書き込み
+  console.log(`${activeRecruitments.size}件の募集データを保存しました`);
+}
 
-// 残りのコードは変更なし
-// 既存のコード...
-// カスタムIDの構造を調査
+// デバッグログ出力
+function debugLog(tag, message, data = null) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [${tag}] ${message}`);
+  if (data) console.log(JSON.stringify(data, null, 2));
+}
+
+// メインのinteractionCreateイベントハンドラ
+client.on('interactionCreate', async interaction => {
+  try {
+    // ボタンインタラクション
+    if (interaction.isButton()) {
+      // IDチェック用ボタン処理
+      if (interaction.customId.startsWith('short_') || 
+          interaction.customId.startsWith('medium_') || 
+          interaction.customId.startsWith('long_')) {
+          
+        const parts = interaction.customId.split('_');
+        const type = parts[0];
+        const id = parts.slice(1).join('_'); // 残りの部分をすべて結合
+
+        console.log(`IDチェック - タイプ: ${type}, ID: ${id}, 長さ: ${id.length}`);
+
+        await interaction.reply({
+          content: `IDチェック結果:\nタイプ: ${type}\nID: ${id}\nID長さ: ${id.length}文字`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // テスト用確認ボタン処理
+      if (interaction.customId === 'timetest_confirm') {
+        try {
+          await interaction.reply({
+            content: 'テスト確認完了！',
+            ephemeral: true
+          });
+          return;
+        } catch (error) {
+          console.error('テスト確認エラー:', error);
+        }
+      }
+      
+      // シンプルテストボタン
+      if (interaction.customId === 'simple_test') {
+        await interaction.reply({
+          content: 'テストボタンが正常に動作しています！',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // 確認ボタンの処理
+      if (interaction.customId.startsWith('confirm_')) {
+        // confirm_recruitment_で始まる場合は特別な処理にスキップ
+        if (interaction.customId.startsWith('confirm_recruitment_')) {
+          await handleButtonInteraction(interaction);
+          return;
+        }
+        
+        console.log('確認ボタンを検出: ' + interaction.customId);
+        
+        try {
+          // deferReplyで応答の時間を確保
+          await interaction.deferReply({ ephemeral: true });
+          console.log('確認ボタン deferReply成功');
+          
+          // recruitmentIdを抽出
+          const recruitmentId = interaction.customId.split('_')[1];
+          console.log(`確認ボタン recruitmentId: ${recruitmentId}`);
+          
+          // 確認メッセージ
+          await interaction.editReply({
+            content: '参加が確認されました。ありがとうございます！',
+          });
+          
+          console.log('確認メッセージ送信成功');
+        } catch (error) {
+          console.error('確認ボタン処理エラー:', error);
+          console.error('エラー詳細:', error.message);
+          console.error('スタックトレース:', error.stack);
+          
+          handleErrorReply(interaction, error);
+        }
+        return;
+      }
+      
+      // その他のボタンは専用関数で処理
+      await handleButtonInteraction(interaction);
+    }
+    // セレクトメニューインタラクション
+    else if (interaction.isStringSelectMenu()) {
+      // テスト用時間選択メニュー処理
+      if (interaction.customId === 'timetest_select') {
+        try {
+          await interaction.deferUpdate();
+          console.log('テスト時間選択:', interaction.values[0]);
+
+          const testButton = new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId('timetest_confirm')
+                .setLabel('確認テスト')
+                .setStyle(ButtonStyle.Success)
+            );
+
+          await interaction.editReply({
+            content: `テスト: 「${interaction.values[0]}」を選択しました`,
+            components: [testButton]
+          });
+          return;
+        } catch (error) {
+          console.error('テスト時間選択エラー:', error);
+        }
+      }
+      
+      // 時間選択メニュー処理
+      if (interaction.customId.startsWith('timemenu_')) {
+        console.log('本番時間選択を検出: ' + interaction.customId);
+
+        try {
+          // deferUpdateで応答の時間を確保
+          await interaction.deferUpdate();
+          console.log('本番時間選択 deferUpdate成功');
+
+          // 選択された時間
+          const selectedTime = interaction.values[0];
+          console.log(`本番選択時間: ${selectedTime}`);
+
+          // recruitmentIdを抽出
+          const recruitmentId = interaction.customId.split('_')[1];
+          console.log(`本番recruitmentId: ${recruitmentId}`);
+
+          // 確認ボタン
+          const confirmRow = new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(`confirm_${recruitmentId}`)
+                .setLabel('参加を確定する')
+                .setStyle(ButtonStyle.Success)
+            );
+
+          // 応答
+          await interaction.editReply({
+            content: `時間「${selectedTime}」を選択しました。参加を確定しますか？`,
+            components: [confirmRow],
+            embeds: []
+          });
+
+          console.log('本番時間選択 確認ボタン表示成功');
+        } catch (error) {
+          console.error('本番時間選択エラー:', error);
+          console.error('エラー詳細:', error.message);
+          console.error('スタックトレース:', error.stack);
+          
+          handleErrorReply(interaction, error);
+        }
+        return;
+      }
+      
+      // 監視用のログ
+      debugLog('MONITOR', `セレクトメニュー検出: ${interaction.customId}`, {
+        guildId: interaction.guildId,
+        channelId: interaction.channelId,
+        userId: interaction.user.id,
+        values: interaction.values
+      });
+      
+      // その他のセレクトメニューは専用関数で処理
+      await handleSelectMenuInteraction(interaction);
+    }
+  } catch (error) {
+    console.error('インタラクション処理エラー:', error);
+    handleErrorReply(interaction, error);
+  }
+});
+
+// エラー応答ヘルパー関数
+async function handleErrorReply(interaction, error) {
+  try {
+    if (interaction.deferred) {
+      await interaction.editReply({ 
+        content: 'エラーが発生しました。もう一度お試しください。' 
+      });
+    } else if (!interaction.replied) {
+      await interaction.reply({ 
+        content: 'エラーが発生しました。', 
+        ephemeral: true 
+      });
+    }
+  } catch (replyErr) {
+    console.error('エラー応答失敗:', replyErr);
+  }
+}
+
+// カスタムIDの構造を調査するためのコマンド
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -117,26 +311,7 @@ client.on('messageCreate', async message => {
   }
 });
 
-// IDチェック用ボタン処理
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isButton()) return;
-
-  const customId = interaction.customId;
-
-  if (customId.startsWith('short_') || customId.startsWith('medium_') || customId.startsWith('long_')) {
-    const parts = customId.split('_');
-    const type = parts[0];
-    const id = parts.slice(1).join('_'); // 残りの部分をすべて結合
-
-    console.log(`IDチェック - タイプ: ${type}, ID: ${id}, 長さ: ${id.length}`);
-
-    await interaction.reply({
-      content: `IDチェック結果:\nタイプ: ${type}\nID: ${id}\nID長さ: ${id.length}文字`,
-      ephemeral: true
-    });
-  }
-});
-// 新しいデバッグ用コマンド
+// 新しいデバッグ用コマンド：時間フローテスト
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -202,46 +377,7 @@ client.on('messageCreate', async message => {
   }
 });
 
-// インタラクションハンドラに追加
-client.on('interactionCreate', async interaction => {
-  // 既存のコード...
-
-  // テスト用時間選択メニュー処理
-  if (interaction.isStringSelectMenu() && interaction.customId === 'timetest_select') {
-    try {
-      await interaction.deferUpdate();
-      console.log('テスト時間選択:', interaction.values[0]);
-
-      const testButton = new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId('timetest_confirm')
-            .setLabel('確認テスト')
-            .setStyle(ButtonStyle.Success)
-        );
-
-      await interaction.editReply({
-        content: `テスト: 「${interaction.values[0]}」を選択しました`,
-        components: [testButton]
-      });
-    } catch (error) {
-      console.error('テスト時間選択エラー:', error);
-    }
-  }
-
-  // テスト用確認ボタン処理
-  if (interaction.isButton() && interaction.customId === 'timetest_confirm') {
-    try {
-      await interaction.reply({
-        content: 'テスト確認完了！',
-        ephemeral: true
-      });
-    } catch (error) {
-      console.error('テスト確認エラー:', error);
-    }
-  }
-});
-// ここに新しいイベントハンドラとして追加
+// Discord.js v14テストコマンド
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -271,21 +407,6 @@ client.on('messageCreate', async message => {
   }
 });
 
-// 既存のインタラクションハンドラの中に以下を追加
-client.on('interactionCreate', async interaction => {
-  // 既存のコード...
-
-  // ここに追加（既存の条件分岐と同じレベルで）
-  if (interaction.isButton() && interaction.customId === 'simple_test') {
-    await interaction.reply({
-      content: 'テストボタンが正常に動作しています！',
-      ephemeral: true
-    });
-    return; // 処理を終了
-  }
-
-  // 残りの既存コード...
-});
 // メッセージコマンドハンドラ
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
@@ -294,349 +415,12 @@ client.on('messageCreate', async message => {
   if (message.content === '!募集') {
     await startRecruitment(message);
   }
-  
 });
-　//ぼしゆうてすと
-// デバッグログ出力
-function debugLog(tag, message, data = null) {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] [${tag}] ${message}`);
-  if (data) console.log(JSON.stringify(data, null, 2));
-}
-
-// セレクトメニュー処理の監視
-client.on('interactionCreate', interaction => {
-  if (!interaction.isStringSelectMenu()) return;
-
-  debugLog('MONITOR', `セレクトメニュー検出: ${interaction.customId}`, {
-    guildId: interaction.guildId,
-    channelId: interaction.channelId,
-    userId: interaction.user.id,
-    values: interaction.values
-  });
-});
-// インタラクションハンドラに追加するコード
-// 時間選択メニューと確認ボタンのハンドラ
-client.on('interactionCreate', async interaction => {
-  try {
-    // timemenuの処理
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('timemenu_')) {
-      console.log('本番時間選択を検出: ' + interaction.customId);
-
-      try {
-        // deferUpdateで応答の時間を確保
-        await interaction.deferUpdate();
-        console.log('本番時間選択 deferUpdate成功');
-
-        // 選択された時間
-        const selectedTime = interaction.values[0];
-        console.log(`本番選択時間: ${selectedTime}`);
-
-        // recruitmentIdを抽出
-        const recruitmentId = interaction.customId.split('_')[1];
-        console.log(`本番recruitmentId: ${recruitmentId}`);
-
-        // 確認ボタン
-        const confirmRow = new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(`confirm_${recruitmentId}`)
-              .setLabel('参加を確定する')
-              .setStyle(ButtonStyle.Success)
-          );
-
-        // 応答
-        await interaction.editReply({
-          content: `時間「${selectedTime}」を選択しました。参加を確定しますか？`,
-          components: [confirmRow],
-          embeds: []
-        });
-
-        console.log('本番時間選択 確認ボタン表示成功');
-      } catch (error) {
-        console.error('本番時間選択エラー:', error);
-        console.error('エラー詳細:', error.message);
-        console.error('スタックトレース:', error.stack);
-
-        try {
-          if (interaction.deferred) {
-            await interaction.editReply({ 
-              content: 'エラーが発生しました。もう一度お試しください。' 
-            });
-          } else {
-            await interaction.reply({ 
-              content: 'エラーが発生しました。', 
-              ephemeral: true 
-            });
-          }
-        } catch (replyErr) {
-          console.error('エラー応答失敗:', replyErr);
-        }
-      }
-    }
-
-    // 確認ボタンの処理
-    if (interaction.isButton() && interaction.customId.startsWith('confirm_')) {
-      // confirm_recruitment_ で始まる場合は処理をスキップ
-      if (interaction.customId.startsWith('confirm_recruitment_')) {
-        return; // 下のhandleButtonInteractionに処理を任せる
-      }
-      
-      console.log('確認ボタンを検出: ' + interaction.customId);
-      
-      try {
-        // deferReplyで応答の時間を確保
-        await interaction.deferReply({ ephemeral: true });
-        console.log('確認ボタン deferReply成功');
-        
-        // recruitmentIdを抽出
-        const recruitmentId = interaction.customId.split('_')[1];
-        console.log(`確認ボタン recruitmentId: ${recruitmentId}`);
-        
-        // 確認メッセージ
-        await interaction.editReply({
-          content: '参加が確認されました。ありがとうございます！',
-        });
-        
-        console.log('確認メッセージ送信成功');
-      } catch (error) {
-        console.error('確認ボタン処理エラー:', error);
-        console.error('エラー詳細:', error.message);
-        console.error('スタックトレース:', error.stack);
-        
-        try {
-          if (interaction.deferred) {
-            await interaction.editReply({ 
-              content: 'エラーが発生しました。もう一度お試しください。' 
-            });
-          } else {
-            await interaction.reply({ 
-              content: 'エラーが発生しました。', 
-              ephemeral: true 
-            });
-          }
-        } catch (replyErr) {
-          console.error('エラー応答失敗:', replyErr);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('インタラクション処理エラー:', error);
-    try {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: 'エラーが発生しました。もう一度お試しください。',
-          ephemeral: true
-        });
-      }
-    } catch (replyError) {
-      console.error('エラー応答失敗:', replyError);
-    }
-  }
-});
-  // インタラクションハンドラに時間選択処理を追加
-
-// 確認ボタンの処理
-if (interaction.isButton() && interaction.customId.startsWith('confirm_')) {
-// confirm_recruitment_ で始まる場合は処理をスキップ（下の関数に任せる）
- if (interaction.customId.startsWith('confirm_recruitment_')) {
-  return; // 下のhandleButtonInteractionに処理を任せる
-}
-  console.log('確認ボタンを検出: ' + interaction.customId);
-  
-  try {
-    // deferReplyで応答の時間を確保
-    await interaction.deferReply({ ephemeral: true });
-    console.log('確認ボタン deferReply成功');
-    
-    // recruitmentIdを抽出
-    const recruitmentId = interaction.customId.split('_')[1];
-    console.log(`確認ボタン recruitmentId: ${recruitmentId}`);
-    
-    // 確認メッセージ
-    await interaction.editReply({
-      content: '参加が確認されました。ありがとうございます！',
-    });
-    
-    console.log('確認メッセージ送信成功');
-  } catch (error) {
-    console.error('確認ボタン処理エラー:', error);
-    console.error('エラー詳細:', error.message);
-    console.error('スタックトレース:', error.stack);
-    
-    try {
-      if (interaction.deferred) {
-        await interaction.editReply({ 
-          content: 'エラーが発生しました。もう一度お試しください。' 
-        });
-      } else {
-        await interaction.reply({ 
-          content: 'エラーが発生しました。', 
-          ephemeral: true 
-        });
-      }
-    } catch (replyErr) {
-      console.error('エラー応答失敗:', replyErr);
-    }
-  }
-}
-
-// 他の既存のインタラクション処理...
-
-        
 
 // ボタンインタラクション処理関数
 async function handleButtonInteraction(interaction) {
   const customId = interaction.customId;
   console.log(`ボタン処理: ${customId}`);
-
-  // ここに既存のボタン処理コードを移動
-  // 例: 参加ボタン
-  if (customId.startsWith('join_')) {
-    // 既存の参加処理...
-    console.log('参加ボタンが押されました');
-    // 仮の応答
-    await interaction.reply({ content: 'ボタン処理中...', ephemeral: true });
-  }
-  // その他のボタン
-  else {
-    console.log(`未処理のボタンID: ${customId}`);
-    await interaction.reply({ content: 'このボタンは現在サポートされていません', ephemeral: true });
-  }
-}
-
-        // セレクトメニュー処理関数
-        async function handleSelectMenuInteraction(interaction) {
-          const customId = interaction.customId;
-          console.log(`セレクトメニュー処理: ${customId}`);
-
-          // 時間選択メニュー処理
-          if (customId.startsWith('time_')) {
-            try {
-              console.log('時間選択処理を開始');
-
-              // まずdeferUpdateで応答の時間を確保
-              await interaction.deferUpdate();
-              console.log('deferUpdate成功');
-
-              // 選択された時間を取得
-              const selectedTime = interaction.values[0];
-              console.log(`選択された時間: ${selectedTime}`);
-
-              // 募集IDの取得（time_の後の部分）
-              const recruitmentId = customId.split('_')[1] || '';
-              console.log(`募集ID: ${recruitmentId}`);
-
-              // 確認ボタン作成
-              const confirmButton = new ActionRowBuilder()
-                .addComponents(
-                  new ButtonBuilder()
-                    .setCustomId(`confirm_${recruitmentId}`)
-                    .setLabel('参加を確定する')
-                    .setStyle(ButtonStyle.Success)
-                );
-
-              // 応答を編集
-              await interaction.editReply({
-                content: `時間「${selectedTime}」を選択しました。参加を確定しますか？`,
-                components: [confirmButton],
-                embeds: [] // 明示的に空にする
-              });
-
-              console.log('参加確認UI表示完了');
-            } catch (error) {
-              console.error('時間選択処理エラー:', error);
-              console.error('エラー詳細:', error.message);
-              console.error('スタックトレース:', error.stack);
-
-              try {
-                if (interaction.deferred) {
-                  await interaction.editReply({ 
-                    content: 'エラーが発生しました。もう一度お試しください。'
-                  });
-                } else {
-                  await interaction.reply({ 
-                    content: 'エラーが発生しました。', 
-                    ephemeral: true 
-                  });
-                }
-              } catch (replyErr) {
-                console.error('エラー応答失敗:', replyErr);
-              }
-            }
-          }
-
-          // 他のセレクトメニュー処理（省略）
-        
-  // 属性選択メニュー
-  else if (customId.startsWith('attr_')) {
-    console.log('属性選択処理');
-
-    // 選択値の取得
-    const selectedAttributes = interaction.values;
-    console.log(`選択された属性: ${selectedAttributes.join(', ')}`);
-
-    // 仮の応答
-    await interaction.update({
-      content: `属性「${selectedAttributes.join(', ')}」が選択されました`,
-      components: []
-    });
-  }
-  // その他のセレクトメニュー
-  else {
-    console.log(`未処理のセレクトメニューID: ${customId}`);
-    await interaction.update({
-      content: 'このメニューは現在サポートされていません',
-      components: []
-    });
-  }
-}
-// 募集開始処理
-async function startRecruitment(message) {
-  // レイドタイプ選択ボタン
-  const row = new ActionRowBuilder()
-    .addComponents(
-      ...raidTypes.map(type =>
-        new ButtonBuilder()
-          .setCustomId(`raid_type_${type}`)
-          .setLabel(type)
-          .setStyle(ButtonStyle.Primary)
-      )
-    );
-
-  const embed = new EmbedBuilder()
-    .setTitle('🔰 高難易度募集作成')
-    .setDescription('募集するレイドタイプを選択してください。')
-    .setColor('#0099ff');
-
-  const response = await message.reply({
-    embeds: [embed],
-    components: [row]
-  });
-
-  // 30分後に自動的にボタンを無効化
-  setTimeout(() => {
-    const disabledRow = new ActionRowBuilder()
-      .addComponents(
-        ...raidTypes.map(type =>
-          new ButtonBuilder()
-            .setCustomId(`raid_type_${type}`)
-            .setLabel(type)
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(true)
-        )
-      );
-
-    response.edit({
-      embeds: [embed.setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')],
-      components: [disabledRow]
-    }).catch(console.error);
-  }, 30 * 60 * 1000); // 30分後
-}
-
-// ボタンインタラクション処理
-async function handleButtonInteraction(interaction) {
-  const customId = interaction.customId;
 
   // レイドタイプ選択
   if (customId.startsWith('raid_type_')) {
@@ -694,15 +478,65 @@ async function handleButtonInteraction(interaction) {
       components: []
     });
   }
+  // その他の未処理ボタン
+  else {
+    console.log(`未処理のボタンID: ${customId}`);
+    await interaction.reply({ 
+      content: 'このボタンは現在サポートされていません', 
+      ephemeral: true 
+    });
+  }
 }
 
-// セレクトメニュー処理
+// セレクトメニュー処理関数
 async function handleSelectMenuInteraction(interaction) {
   const customId = interaction.customId;
   console.log(`セレクトメニュー処理: ${customId}`);
 
+  // 時間選択メニュー処理
+  if (customId.startsWith('time_')) {
+    try {
+      console.log('時間選択処理を開始');
+
+      // まずdeferUpdateで応答の時間を確保
+      await interaction.deferUpdate();
+      console.log('deferUpdate成功');
+
+      // 選択された時間を取得
+      const selectedTime = interaction.values[0];
+      console.log(`選択された時間: ${selectedTime}`);
+
+      // 募集IDの取得（time_の後の部分）
+      const recruitmentId = customId.split('_')[1] || '';
+      console.log(`募集ID: ${recruitmentId}`);
+
+      // 確認ボタン作成
+      const confirmButton = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`confirm_${recruitmentId}`)
+            .setLabel('参加を確定する')
+            .setStyle(ButtonStyle.Success)
+        );
+
+      // 応答を編集
+      await interaction.editReply({
+        content: `時間「${selectedTime}」を選択しました。参加を確定しますか？`,
+        components: [confirmButton],
+        embeds: [] // 明示的に空にする
+      });
+
+      console.log('参加確認UI表示完了');
+    } catch (error) {
+      console.error('時間選択処理エラー:', error);
+      console.error('エラー詳細:', error.message);
+      console.error('スタックトレース:', error.stack);
+
+      handleErrorReply(interaction, error);
+    }
+  }
   // 時間選択
-  if (customId.startsWith('time_select_')) {
+  else if (customId.startsWith('time_select_')) {
     const [_, __, raidType, date] = customId.split('_');
     const selectedTime = interaction.values[0];
     await confirmRecruitment(interaction, raidType, date, selectedTime);
@@ -735,6 +569,71 @@ async function handleSelectMenuInteraction(interaction) {
       selectedTime
     );
   }
+  // 属性選択メニュー
+  else if (customId.startsWith('attr_')) {
+    console.log('属性選択処理');
+
+    // 選択値の取得
+    const selectedAttributes = interaction.values;
+    console.log(`選択された属性: ${selectedAttributes.join(', ')}`);
+
+    // 仮の応答
+    await interaction.update({
+      content: `属性「${selectedAttributes.join(', ')}」が選択されました`,
+      components: []
+    });
+  }
+  // その他のセレクトメニュー
+  else {
+    console.log(`未処理のセレクトメニューID: ${customId}`);
+    await interaction.update({
+      content: 'このメニューは現在サポートされていません',
+      components: []
+    });
+  }
+}
+
+// 募集開始処理
+async function startRecruitment(message) {
+  // レイドタイプ選択ボタン
+  const row = new ActionRowBuilder()
+    .addComponents(
+      ...raidTypes.map(type =>
+        new ButtonBuilder()
+          .setCustomId(`raid_type_${type}`)
+          .setLabel(type)
+          .setStyle(ButtonStyle.Primary)
+      )
+    );
+
+  const embed = new EmbedBuilder()
+    .setTitle('🔰 高難易度募集作成')
+    .setDescription('募集するレイドタイプを選択してください。')
+    .setColor('#0099ff');
+
+  const response = await message.reply({
+    embeds: [embed],
+    components: [row]
+  });
+
+  // 30分後に自動的にボタンを無効化
+  setTimeout(() => {
+    const disabledRow = new ActionRowBuilder()
+      .addComponents(
+        ...raidTypes.map(type =>
+          new ButtonBuilder()
+            .setCustomId(`raid_type_${type}`)
+            .setLabel(type)
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(true)
+        )
+      );
+
+    response.edit({
+      embeds: [embed.setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')],
+      components: [disabledRow]
+    }).catch(console.error);
+  }, 30 * 60 * 1000); // 30分後
 }
 
 // 日付選択UI表示
@@ -776,7 +675,6 @@ async function showDateSelection(interaction, raidType) {
     components: rows
   });
 }
-
 // 時間選択UI表示
 async function showTimeSelection(interaction, raidType, date) {
   // 時間選択用セレクトメニュー
@@ -859,7 +757,6 @@ async function confirmRecruitment(interaction, raidType, date, time) {
   });
 }
 
-// 募集確定処理（続き）
 // 募集確定処理
 async function finalizeRecruitment(interaction, recruitmentId) {
   console.log(`募集確定処理開始: ${recruitmentId}`);
@@ -875,16 +772,12 @@ async function finalizeRecruitment(interaction, recruitmentId) {
   }
 
   recruitment.status = 'active';
-
-
   
   const formattedDate = new Date(recruitment.date).toLocaleDateString('ja-JP', {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   });
-
-  
 
   const embed = new EmbedBuilder()
     .setTitle(`📢 【募集】${recruitment.type} - ${formattedDate} ${recruitment.time}`)
@@ -942,7 +835,7 @@ async function showJoinOptions(interaction, recruitmentId) {
   if (!recruitment || recruitment.status !== 'active') {
     return await interaction.reply({
       content: 'この募集は既に終了しているか、存在しません。',
-    flags: [1 << 6] // Discord.js の MessageFlags.Ephemeral に相当
+      ephemeral: true
     });
   }
 
@@ -950,7 +843,7 @@ async function showJoinOptions(interaction, recruitmentId) {
   const existingParticipation = recruitment.participants.find(p => p.userId === interaction.user.id);
   if (existingParticipation) {
     return await interaction.reply({
-      content: `あなたはすでにこの募集に参加しています。\n選択した属性: ${existingParticipation.attributes.join(', ')}\n参加可能時間: ${existingParticipation.timeAvailability}\nキャンセルする場合は「参加キャンセル」ボタンを押してください。`,
+      content: `あなたはすでにこの募集に参加しています。\n選択した属性: ${existingParticipation.attributes.join(', ')}\n参加可能時間: ${existingParticipation.timeAvailability}`,
       ephemeral: true
     });
   }
@@ -1001,7 +894,6 @@ async function showJoinOptions(interaction, recruitmentId) {
 async function showAttributeSelection(interaction, recruitmentId, joinType) {
   console.log(`属性選択UI表示: ${recruitmentId}, ${joinType}`);
   
-
   // デバッグログ追加: 現在の全募集IDを出力
   const allRecruitmentIds = Array.from(activeRecruitments.keys());
   console.log(`現在の全募集ID: [${allRecruitmentIds.join(', ')}]`);
@@ -1047,7 +939,7 @@ async function showAttributeSelection(interaction, recruitmentId, joinType) {
   });
 }
 
-// 時間選択UI表示（成功したtimeflowパターンに合わせて修正）
+// 時間選択UI表示
 async function showTimeAvailabilitySelection(interaction, recruitmentId, joinType, selectedAttributes) {
   console.log('=== 時間選択UI表示が呼び出されました ===');
   console.log(`recruitmentId: ${recruitmentId}, joinType: ${joinType}`);
@@ -1417,346 +1309,331 @@ async function autoAssignAttributes(recruitment) {
     }
   });
 
-  // 一番参加者が多い時間帯のレイドタイプを決定（参加者希望の場合のみ）
-  let raidTypeToAssign = recruitment.type;
-  if (recruitment.type === '参加者希望') {
-    const participantsInBestTimeSlot = participantsByTime[bestTimeSlot];
-
-    let tengenCount = 0;
-    let luciZeroCount = 0;
-
-    participantsInBestTimeSlot.forEach(p => {
-      if (p.joinType === '天元') tengenCount++;
-      else if (p.joinType === 'ルシゼロ') luciZeroCount++;
+    // 一番参加者が多い時間帯のレイドタイプを決定（参加者希望の場合のみ）
+    let raidTypeToAssign = recruitment.type;
+    if (recruitment.type === '参加者希望') {
+      const participantsInBestTimeSlot = participantsByTime[bestTimeSlot];
+  
+      let tengenCount = 0;
+      let luciZeroCount = 0;
+  
+      participantsInBestTimeSlot.forEach(p => {
+        if (p.joinType === '天元') tengenCount++;
+        else if (p.joinType === 'ルシゼロ') luciZeroCount++;
+      });
+  
+      raidTypeToAssign = tengenCount > luciZeroCount ? '天元' : 'ルシゼロ';
+    }
+  
+    // 選択された時間帯とレイドタイプに基づいて参加者をフィルタリング
+    const eligibleParticipants = participantsByTime[bestTimeSlot].filter(p => {
+      if (raidTypeToAssign === '天元') {
+        return p.joinType === '天元' || p.joinType === 'なんでも可';
+      } else {
+        return p.joinType === 'ルシゼロ' || p.joinType === 'なんでも可';
+      }
     });
-
-    raidTypeToAssign = tengenCount > luciZeroCount ? '天元' : 'ルシゼロ';
-  }
-
-  // 選択された時間帯とレイドタイプに基づいて参加者をフィルタリング
-  const eligibleParticipants = participantsByTime[bestTimeSlot].filter(p => {
-    if (raidTypeToAssign === '天元') {
-      return p.joinType === '天元' || p.joinType === 'なんでも可';
-    } else {
-      return p.joinType === 'ルシゼロ' || p.joinType === 'なんでも可';
+  
+    // 属性の割り振り処理
+    const assignments = {};
+    attributes.forEach(attr => {
+      assignments[attr] = null;
+    });
+  
+    // 優先順位付け：
+    // 1. 特定の属性だけを選択している人を優先
+    // 2. 選択属性数が少ない人を優先
+  
+    // 参加者を属性選択数で並べ替え
+    eligibleParticipants.sort((a, b) => a.attributes.length - b.attributes.length);
+  
+    // 各参加者について、選択した属性のうち最も希望者が少ない属性に割り当て
+    for (const participant of eligibleParticipants) {
+      // この参加者が選択した属性で、まだ割り当てられていないものを探す
+      const availableAttributes = participant.attributes.filter(attr => !assignments[attr]);
+  
+      if (availableAttributes.length > 0) {
+        // 利用可能な属性から一つ選択
+        const chosenAttribute = availableAttributes[0];
+        assignments[chosenAttribute] = participant;
+        participant.assignedAttribute = chosenAttribute;
+      }
     }
-  });
-
-  // 属性の割り振り処理
-  const assignments = {};
-  attributes.forEach(attr => {
-    assignments[attr] = null;
-  });
-
-  // 優先順位付け：
-  // 1. 特定の属性だけを選択している人を優先
-  // 2. 選択属性数が少ない人を優先
-
-  // 参加者を属性選択数で並べ替え
-  eligibleParticipants.sort((a, b) => a.attributes.length - b.attributes.length);
-
-  // 各参加者について、選択した属性のうち最も希望者が少ない属性に割り当て
-  for (const participant of eligibleParticipants) {
-    // この参加者が選択した属性で、まだ割り当てられていないものを探す
-    const availableAttributes = participant.attributes.filter(attr => !assignments[attr]);
-
-    if (availableAttributes.length > 0) {
-      // 利用可能な属性から一つ選択
-      const chosenAttribute = availableAttributes[0];
-      assignments[chosenAttribute] = participant;
-      participant.assignedAttribute = chosenAttribute;
+  
+    // 埋まっていない属性を、まだ割り当てられていない参加者で埋める
+    const unassignedParticipants = eligibleParticipants.filter(p => !p.assignedAttribute);
+    const emptyAttributes = attributes.filter(attr => !assignments[attr]);
+  
+    for (let i = 0; i < Math.min(unassignedParticipants.length, emptyAttributes.length); i++) {
+      const participant = unassignedParticipants[i];
+      const attr = emptyAttributes[i];
+  
+      // 参加者の希望属性に含まれていない場合でも割り当て
+      assignments[attr] = participant;
+      participant.assignedAttribute = attr;
     }
-  }
-
-  // 埋まっていない属性を、まだ割り当てられていない参加者で埋める
-  const unassignedParticipants = eligibleParticipants.filter(p => !p.assignedAttribute);
-  const emptyAttributes = attributes.filter(attr => !assignments[attr]);
-
-  for (let i = 0; i < Math.min(unassignedParticipants.length, emptyAttributes.length); i++) {
-    const participant = unassignedParticipants[i];
-    const attr = emptyAttributes[i];
-
-    // 参加者の希望属性に含まれていない場合でも割り当て
-    assignments[attr] = participant;
-    participant.assignedAttribute = attr;
-  }
-
-  // 割り当て結果を元の参加者リストに反映
-  for (const participant of recruitment.participants) {
-    const assignedParticipant = eligibleParticipants.find(p => p.userId === participant.userId);
-    if (assignedParticipant && assignedParticipant.assignedAttribute) {
-      participant.assignedAttribute = assignedParticipant.assignedAttribute;
-    } else {
-      participant.assignedAttribute = null;
+  
+    // 割り当て結果を元の参加者リストに反映
+    for (const participant of recruitment.participants) {
+      const assignedParticipant = eligibleParticipants.find(p => p.userId === participant.userId);
+      if (assignedParticipant && assignedParticipant.assignedAttribute) {
+        participant.assignedAttribute = assignedParticipant.assignedAttribute;
+      } else {
+        participant.assignedAttribute = null;
+      }
     }
+  
+    // 時間とレイドタイプを更新
+    recruitment.finalTime = bestTimeSlot;
+    recruitment.finalRaidType = raidTypeToAssign;
+  
+    return recruitment;
   }
-
-  // 時間とレイドタイプを更新
-  recruitment.finalTime = bestTimeSlot;
-  recruitment.finalRaidType = raidTypeToAssign;
-
-  return recruitment;
-}
-
-// 自動締め切りチェック
-function checkAutomaticClosing() {
-  const now = new Date();
-
-  activeRecruitments.forEach(async (recruitment, id) => {
-    if (recruitment.status !== 'active') return;
-
-    const raidDate = new Date(recruitment.date);
-    raidDate.setHours(8, 0, 0, 0); // 開催日の朝8時
-
-    // 開催日の朝8時を過ぎている場合、自動締め切り
-    if (now >= raidDate) {
-      recruitment.status = 'closed';
-      await autoAssignAttributes(recruitment);
-      await updateRecruitmentMessage(recruitment);
-
-      // 終了メッセージを送信
-      try {
-        const channel = await client.channels.fetch(recruitment.channel);
-        if (channel) {
-          await channel.send({
-            content: `<@${recruitment.creator}> **【自動締め切り】** ${recruitment.type}募集が締め切られ、参加者が割り振られました。`
-          });
+  
+  // 自動締め切りチェック
+  function checkAutomaticClosing() {
+    const now = new Date();
+  
+    activeRecruitments.forEach(async (recruitment, id) => {
+      if (recruitment.status !== 'active') return;
+  
+      const raidDate = new Date(recruitment.date);
+      raidDate.setHours(8, 0, 0, 0); // 開催日の朝8時
+  
+      // 開催日の朝8時を過ぎている場合、自動締め切り
+      if (now >= raidDate) {
+        recruitment.status = 'closed';
+        await autoAssignAttributes(recruitment);
+        await updateRecruitmentMessage(recruitment);
+  
+        // 終了メッセージを送信
+        try {
+          const channel = await client.channels.fetch(recruitment.channel);
+          if (channel) {
+            await channel.send({
+              content: `<@${recruitment.creator}> **【自動締め切り】** ${recruitment.type}募集が締め切られ、参加者が割り振られました。`
+            });
+          }
+        } catch (error) {
+          console.error('自動締め切りメッセージ送信エラー:', error);
         }
-      } catch (error) {
-        console.error('自動締め切りメッセージ送信エラー:', error);
       }
+    });
+  }
+  
+  // 募集管理機能 - 募集リスト表示
+  client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+  
+    if (message.content === '!募集リスト') {
+      await showActiveRecruitments(message);
     }
   });
-}
-
-// Botログイン
-// 環境変数からトークンを取得してボットにログイン
-
-
-// 募集管理機能（続き）
-
-// 現在募集中のリストを表示する機能
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-
-  if (message.content === '!募集リスト') {
-    await showActiveRecruitments(message);
-  }
-});
-
-// 募集リスト表示機能
-async function showActiveRecruitments(message) {
-  const activeList = Array.from(activeRecruitments.values())
-    .filter(r => r.status === 'active');
-
-  if (activeList.length === 0) {
-    return message.reply('現在募集中の高難易度レイドはありません。');
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle('🔍 現在募集中のレイド一覧')
-    .setDescription('参加するには該当の募集メッセージで「参加申込」ボタンを押してください。')
-    .setColor('#0099ff');
-
-  // 募集情報を整理
-  activeList.forEach((recruitment, index) => {
-    const formattedDate = new Date(recruitment.date).toLocaleDateString('ja-JP', {
-      month: 'long',
-      day: 'numeric'
-    });
-
-    const participantCount = recruitment.participants.length;
-
-    embed.addFields({
-      name: `${index + 1}. ${recruitment.type} - ${formattedDate} ${recruitment.time}`,
-      value: `募集者: <@${recruitment.creator}>\n参加者数: ${participantCount}名\n[募集ページへジャンプ](https://discord.com/channels/${message.guildId}/${recruitment.channel}/${recruitment.messageId})`
-    });
-  });
-
-  await message.reply({ embeds: [embed] });
-}
-
-// 募集削除コマンド
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-
-  if (message.content.startsWith('!募集削除 ')) {
-    const recruitmentId = message.content.replace('!募集削除 ', '');
-    await deleteRecruitment(message, recruitmentId);
-  }
-});
-
-// 募集削除処理
-async function deleteRecruitment(message, recruitmentId) {
-  const recruitment = activeRecruitments.get(recruitmentId);
-
-  if (!recruitment) {
-    return message.reply('指定された募集IDは存在しません。');
-  }
-
-  // 募集者またはサーバー管理者のみ削除可能
-  if (recruitment.creator !== message.author.id && !message.member.permissions.has('ADMINISTRATOR')) {
-    return message.reply('募集者またはサーバー管理者のみが募集を削除できます。');
-  }
-
-  try {
-    // 募集メッセージを更新
-    const channel = await client.channels.fetch(recruitment.channel);
-    if (channel) {
-      const recruitMessage = await channel.messages.fetch(recruitment.messageId);
-      if (recruitMessage) {
-        await recruitMessage.edit({
-          content: '**【募集削除】** この募集は削除されました。',
-          embeds: [],
-          components: []
-        });
-      }
+  
+  // 募集リスト表示機能
+  async function showActiveRecruitments(message) {
+    const activeList = Array.from(activeRecruitments.values())
+      .filter(r => r.status === 'active');
+  
+    if (activeList.length === 0) {
+      return message.reply('現在募集中の高難易度レイドはありません。');
     }
-
-    // 募集データを削除
-    activeRecruitments.delete(recruitmentId);
-
-    await message.reply(`募集ID: ${recruitmentId} の募集を削除しました。`);
-  } catch (error) {
-    console.error('募集削除エラー:', error);
-    await message.reply('募集の削除中にエラーが発生しました。');
+  
+    const embed = new EmbedBuilder()
+      .setTitle('🔍 現在募集中のレイド一覧')
+      .setDescription('参加するには該当の募集メッセージで「参加申込」ボタンを押してください。')
+      .setColor('#0099ff');
+  
+    // 募集情報を整理
+    activeList.forEach((recruitment, index) => {
+      const formattedDate = new Date(recruitment.date).toLocaleDateString('ja-JP', {
+        month: 'long',
+        day: 'numeric'
+      });
+  
+      const participantCount = recruitment.participants.length;
+  
+      embed.addFields({
+        name: `${index + 1}. ${recruitment.type} - ${formattedDate} ${recruitment.time}`,
+        value: `募集者: <@${recruitment.creator}>\n参加者数: ${participantCount}名\n[募集ページへジャンプ](https://discord.com/channels/${message.guildId}/${recruitment.channel}/${recruitment.messageId})`
+      });
+    });
+  
+    await message.reply({ embeds: [embed] });
   }
-}
-
-// ヘルプ表示
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-
-  if (message.content === '!募集ヘルプ') {
-    await showHelp(message);
-  }
-});
-
-// ヘルプ表示機能
-async function showHelp(message) {
-  const embed = new EmbedBuilder()
-    .setTitle('📚 グラブル高難易度募集Bot ヘルプ')
-    .setDescription('グランブルーファンタジーの高難易度レイド（天元/ルシゼロ）募集を簡単に行うためのボットです。')
-    .setColor('#00cc99')
-    .addFields(
-      {
-        name: '基本コマンド',
-        value: '`!募集` - 新しいレイド募集を開始します\n`!募集リスト` - 現在進行中の募集一覧を表示します\n`!募集ヘルプ` - このヘルプを表示します'
-      },
-      {
-        name: '募集作成の流れ',
-        value: '1. `!募集` コマンドを入力\n2. レイドタイプを選択（天元/ルシゼロ/参加者希望）\n3. 開催日を選択\n4. 開催時間を選択\n5. 内容を確認して「確定」ボタンをクリック'
-      },
-      {
-        name: '参加申込の流れ',
-        value: '1. 募集メッセージの「参加申込」ボタンをクリック\n2. 参加タイプを選択（参加者希望の場合のみ）\n3. 参加可能な属性を選択（複数選択可能）\n4. 参加可能な最も早い時間を選択\n5. 内容を確認して「参加確定」ボタンをクリック'
-      },
-      {
-        name: '属性割り振りについて',
-        value: '- 7人以上の参加表明があった場合、自動的に割り振りが行われます\n- 開催日の朝8時に自動的に締め切られ、割り振りが確定します\n- 募集者は「募集締め切り」ボタンで手動締め切りも可能です\n- 特定の属性のみを選んだ人が優先されます\n- 複数の属性を選んだ人はバランスよく割り振られます'
-      },
-      {
-        name: '管理コマンド',
-        value: '`!募集削除 [募集ID]` - 指定した募集を削除します（募集者または管理者のみ）'
-      }
-    )
-    .setFooter({ text: 'ボタン操作だけで簡単に募集・参加ができます！' });
-
-  await message.reply({ embeds: [embed] });
-}
-
-// エラーハンドリング
-process.on('unhandledRejection', error => {
-  console.error('未処理の Promise rejection:', error);
-});
-
-
-// 未処理のエラーをキャッチ
-process.on('unhandledRejection', error => {
-  console.error('未処理のPromise拒否:', error);
-});
-
-
-
-// Botログイン
-client.login(process.env.TOKEN).catch(console.error);
-
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-
-  // ...既存のコード...
-
-  // デバッグ用コマンド
-  if (message.content.startsWith('!募集確認 ')) {
-    const recruitmentId = message.content.replace('!募集確認 ', '');
+  
+  // 募集削除コマンド
+  client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+  
+    if (message.content.startsWith('!募集削除 ')) {
+      const recruitmentId = message.content.replace('!募集削除 ', '');
+      await deleteRecruitment(message, recruitmentId);
+    }
+  });
+  
+  // 募集削除処理
+  async function deleteRecruitment(message, recruitmentId) {
     const recruitment = activeRecruitments.get(recruitmentId);
-
+  
     if (!recruitment) {
       return message.reply('指定された募集IDは存在しません。');
     }
-
-    // 募集データの詳細を表示
-    const details = {
-      id: recruitment.id,
-      type: recruitment.type,
-      status: recruitment.status,
-      参加者数: recruitment.participants.length,
-      メッセージID: recruitment.messageId,
-      チャンネルID: recruitment.channel
-    };
-
-    // 参加者情報
-    const participantsInfo = recruitment.participants.map(p => {
-      return {
-        ユーザー名: p.username,
-        参加タイプ: p.joinType,
-        属性: p.attributes.join(','),
-        割り当て属性: p.assignedAttribute || '未割り当て'
+  
+    // 募集者またはサーバー管理者のみ削除可能
+    if (recruitment.creator !== message.author.id && !message.member.permissions.has('ADMINISTRATOR')) {
+      return message.reply('募集者またはサーバー管理者のみが募集を削除できます。');
+    }
+  
+    try {
+      // 募集メッセージを更新
+      const channel = await client.channels.fetch(recruitment.channel);
+      if (channel) {
+        const recruitMessage = await channel.messages.fetch(recruitment.messageId);
+        if (recruitMessage) {
+          await recruitMessage.edit({
+            content: '**【募集削除】** この募集は削除されました。',
+            embeds: [],
+            components: []
+          });
+        }
+      }
+  
+      // 募集データを削除
+      activeRecruitments.delete(recruitmentId);
+  
+      await message.reply(`募集ID: ${recruitmentId} の募集を削除しました。`);
+    } catch (error) {
+      console.error('募集削除エラー:', error);
+      await message.reply('募集の削除中にエラーが発生しました。');
+    }
+  }
+  
+  // ヘルプ表示
+  client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+  
+    if (message.content === '!募集ヘルプ') {
+      await showHelp(message);
+    }
+  });
+  
+  // ヘルプ表示機能
+  async function showHelp(message) {
+    const embed = new EmbedBuilder()
+      .setTitle('📚 グラブル高難易度募集Bot ヘルプ')
+      .setDescription('グランブルーファンタジーの高難易度レイド（天元/ルシゼロ）募集を簡単に行うためのボットです。')
+      .setColor('#00cc99')
+      .addFields(
+        {
+          name: '基本コマンド',
+          value: '`!募集` - 新しいレイド募集を開始します\n`!募集リスト` - 現在進行中の募集一覧を表示します\n`!募集ヘルプ` - このヘルプを表示します'
+        },
+        {
+          name: '募集作成の流れ',
+          value: '1. `!募集` コマンドを入力\n2. レイドタイプを選択（天元/ルシゼロ/参加者希望）\n3. 開催日を選択\n4. 開催時間を選択\n5. 内容を確認して募集開始'
+        },
+        {
+          name: '参加申込の流れ',
+          value: '1. 募集メッセージの「参加申込」ボタンをクリック\n2. 参加タイプを選択（参加者希望の場合のみ）\n3. 参加可能な属性を選択（複数選択可）\n4. 参加可能時間を選択\n5. 内容を確認して参加確定'
+        },
+        {
+          name: '属性割り振りについて',
+          value: '- 7人以上の参加表明があった場合、自動的に割り振りが行われます\n- 開催日の朝8時に自動的に締め切られ、割り振りが確定します\n- 募集者は「募集締め切り」ボタンで手動締め切りも可能です'
+        },
+        {
+          name: '管理コマンド',
+          value: '`!募集削除 [募集ID]` - 指定した募集を削除します（募集者または管理者のみ）'
+        }
+      )
+      .setFooter({ text: 'ボタン操作だけで簡単に募集・参加ができます！' });
+  
+    await message.reply({ embeds: [embed] });
+  }
+  
+  // デバッグ用コマンド - 募集確認
+  client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+  
+    if (message.content.startsWith('!募集確認 ')) {
+      const recruitmentId = message.content.replace('!募集確認 ', '');
+      const recruitment = activeRecruitments.get(recruitmentId);
+  
+      if (!recruitment) {
+        return message.reply('指定された募集IDは存在しません。');
+      }
+  
+      // 募集データの詳細を表示
+      const details = {
+        id: recruitment.id,
+        type: recruitment.type,
+        status: recruitment.status,
+        参加者数: recruitment.participants.length,
+        メッセージID: recruitment.messageId,
+        チャンネルID: recruitment.channel
       };
-    });
-
-    await message.reply({
-      content: '```json\n' + JSON.stringify(details, null, 2) + '\n```\n' +
-               '**参加者情報:**\n```json\n' + JSON.stringify(participantsInfo, null, 2) + '\n```',
-      allowedMentions: { users: [] }
-    });
-  }
-});
-// 募集データの状態を確認するコマンド
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-
-  if (message.content === '!募集詳細確認') {
-    const allRecruitments = Array.from(activeRecruitments.entries());
-
-    if (allRecruitments.length === 0) {
-      return message.reply('現在募集データはありません。');
+  
+      // 参加者情報
+      const participantsInfo = recruitment.participants.map(p => {
+        return {
+          ユーザー名: p.username,
+          参加タイプ: p.joinType,
+          属性: p.attributes.join(','),
+          割り当て属性: p.assignedAttribute || '未割り当て'
+        };
+      });
+  
+      await message.reply({
+        content: '```json\n' + JSON.stringify(details, null, 2) + '\n```\n' +
+                 '**参加者情報:**\n```json\n' + JSON.stringify(participantsInfo, null, 2) + '\n```',
+        allowedMentions: { users: [] }
+      });
     }
-
-    let debugInfo = '**現在の募集データ**\n\n';
-
-    allRecruitments.forEach(([id, data]) => {
-      debugInfo += `**募集ID**: \`${id}\`\n`;
-      debugInfo += `- タイプ: ${data.type}\n`;
-      debugInfo += `- 状態: ${data.status}\n`;
-      debugInfo += `- 日付: ${data.date}\n`;
-      debugInfo += `- 時間: ${data.time}\n`;
-      debugInfo += `- メッセージID: ${data.messageId}\n`;
-      debugInfo += `- 参加者数: ${data.participants.length}名\n\n`;
-    });
-
-    // 長さ制限があるので、1000文字以上なら分割
-    if (debugInfo.length > 1900) {
-      const parts = [];
-      for (let i = 0; i < debugInfo.length; i += 1900) {
-        parts.push(debugInfo.substring(i, i + 1900));
+  });
+  
+  // デバッグ用コマンド - 募集データ詳細確認
+  client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+  
+    if (message.content === '!募集詳細確認') {
+      const allRecruitments = Array.from(activeRecruitments.entries());
+  
+      if (allRecruitments.length === 0) {
+        return message.reply('現在募集データはありません。');
       }
-
-      for (const part of parts) {
-        await message.channel.send(part);
+  
+      let debugInfo = '**現在の募集データ**\n\n';
+  
+      allRecruitments.forEach(([id, data]) => {
+        debugInfo += `**募集ID**: \`${id}\`\n`;
+        debugInfo += `- タイプ: ${data.type}\n`;
+        debugInfo += `- 状態: ${data.status}\n`;
+        debugInfo += `- 日付: ${data.date}\n`;
+        debugInfo += `- 時間: ${data.time}\n`;
+        debugInfo += `- メッセージID: ${data.messageId}\n`;
+        debugInfo += `- 参加者数: ${data.participants.length}名\n\n`;
+      });
+  
+      // 長さ制限があるので、1000文字以上なら分割
+      if (debugInfo.length > 1900) {
+        const parts = [];
+        for (let i = 0; i < debugInfo.length; i += 1900) {
+          parts.push(debugInfo.substring(i, i + 1900));
+        }
+  
+        for (const part of parts) {
+          await message.channel.send(part);
+        }
+      } else {
+        await message.reply(debugInfo);
       }
-    } else {
-      await message.reply(debugInfo);
     }
-  }
-});
+  });
+  
+  // 未処理のエラーをキャッチ
+  process.on('unhandledRejection', error => {
+    console.error('未処理のPromise拒否:', error);
+  });
+  
+  // Botログイン
+  client.login(process.env.TOKEN).catch(console.error);
