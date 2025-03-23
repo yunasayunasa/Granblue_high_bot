@@ -676,14 +676,31 @@ async function showTimeAvailabilitySelection(interaction, recruitmentId, joinTyp
 
   try {
     // 時間選択肢
-    const timeSelectOptions = [
-      { label: '19:00', value: '19:00', description: '19:00から参加可能' },
-      { label: '20:00', value: '20:00', description: '20:00から参加可能' },
-      { label: '21:00', value: '21:00', description: '21:00から参加可能' },
-      { label: '22:00', value: '22:00', description: '22:00から参加可能' },
-      { label: '23:00', value: '23:00', description: '23:00から参加可能' },
-      { label: '今すぐ', value: 'now', description: '今すぐ参加可能' }
-    ];
+    // 24時間対応の時間選択肢
+const timeSelectOptions = [];
+for (let i = 0; i < 24; i++) {
+  const hour = i.toString().padStart(2, '0');
+  timeSelectOptions.push({
+    label: `${hour}:00`,
+    value: `${hour}:00`,
+    description: `${hour}:00から参加可能`
+  });
+}
+// 「今すぐ」オプションも追加
+timeSelectOptions.push({
+  label: '今すぐ',
+  value: 'now',
+  description: '今すぐ参加可能'
+});
+    
+    //const timeSelectOptions = [
+      //{ label: '19:00', value: '19:00', description: '19:00から参加可能' },
+    //  { label: '20:00', value: '20:00', description: '20:00から参加可能' },
+  //    { label: '21:00', value: '21:00', description: '21:00から参加可能' },
+    //  { label: '22:00', value: '22:00', description: '22:00から参加可能' },
+    //  { label: '23:00', value: '23:00', description: '23:00から参加可能' },
+     // { label: '今すぐ', value: 'now', description: '今すぐ参加可能' }
+   // ];
 
     // カスタムID (安全に作成)
     const attributesJoined = selectedAttributes.join(',');
