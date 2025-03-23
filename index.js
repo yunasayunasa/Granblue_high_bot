@@ -191,7 +191,7 @@ client.on('interactionCreate', async interaction => {
       
       // 時間選択メニュー処理
 // 募集作成用時間選択メニュー処理
-else if (interaction.customId.startsWith('timemenu_')) {
+else if (interaction.customId.startsWith('recruit_time')) {
   console.log('募集作成用時間選択を検出');
   const [_, raidType, date] = interaction.customId.split('_').slice(1);
   const selectedTime = interaction.values[0];
@@ -502,6 +502,13 @@ async function handleSelectMenuInteraction(interaction) {
     const customId = interaction.customId;
     console.log(`セレクトメニュー処理: ${customId}`);
   
+// 募集作成用時間選択 (新しいカスタムIDに対応)
+if (customId.startsWith('recruit_time_')) {
+  const [_, __, raidType, date] = customId.split('_');
+  const selectedTime = interaction.values[0];
+  await confirmRecruitment(interaction, raidType, date, selectedTime);
+}
+    
     // 時間選択メニュー処理
     if (customId.startsWith('time_')) {
       try {
