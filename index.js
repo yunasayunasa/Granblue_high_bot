@@ -191,9 +191,14 @@ client.on('interactionCreate', async interaction => {
       
       // 時間選択メニュー処理
 // 募集作成用時間選択メニュー処理
-else if (interaction.customId.startsWith('recruit_time')) {
-  console.log('募集作成用時間選択を検出');
-  const [_, raidType, date] = interaction.customId.split('_').slice(1);
+else if (interaction.customId.startsWith('recruit_time') || 
+interaction.customId.startsWith('recruit_select_') || 
+interaction.customId.startsWith('time_select_')) {
+console.log('募集作成用時間選択を検出');
+const parts = interaction.customId.split('_');
+// パターンに応じた抽出
+const raidType = parts.length >= 3 ? parts[2] : '';
+const date = parts.length >= 4 ? parts[3] : '';
   const selectedTime = interaction.values[0];
   await confirmRecruitment(interaction, raidType, date, selectedTime);
   return; // 処理後に早期リターン
@@ -260,17 +265,29 @@ await handleSelectMenuInteraction(interaction);
 });
 
 // エラー応答ヘルパー関数
+// エラー応答ヘルパー関数の改善
 async function handleErrorReply(interaction, error) {
   try {
+    // 10062 (Unknown interaction) エラーの場合は単にログ出力
+    if (error.code === 10062) {
+      console.log('インタラクションタイムアウトまたは未知のインタラクション - 無視します');
+      return;
+    }
+    // 40060 (Already acknowledged) エラーの場合も単にログ出力
+    if (error.code === 40060) {
+      console.log('インタラクションは既に応答済み - 無視します');
+      return;
+    }
+
     if (interaction.deferred) {
       await interaction.editReply({ 
         content: 'エラーが発生しました。もう一度お試しください。' 
-      });
+      }).catch(e => console.log('editReply 失敗:', e.message));
     } else if (!interaction.replied) {
       await interaction.reply({ 
         content: 'エラーが発生しました。', 
         ephemeral: true 
-      });
+      }).catch(e => console.log('reply 失敗:', e.message));
     }
   } catch (replyErr) {
     console.error('エラー応答失敗:', replyErr);
@@ -503,8 +520,13 @@ async function handleSelectMenuInteraction(interaction) {
     console.log(`セレクトメニュー処理: ${customId}`);
   
 // 募集作成用時間選択 (新しいカスタムIDに対応)
-if (customId.startsWith('recruit_time_')) {
-  const [_, __, raidType, date] = customId.split('_');
+if (customId.startsWith('recruit_time_') || customId.startsWith('recruit_select_') || customId.startsWith('time_select_')) {
+  console.log('募集作成用時間選択を検出');
+  // IDパターンの抽出を柔軟に
+  const parts = customId.split('_');
+  // recruit_time_TYPE_DATE や recruit_select_TYPE_DATE の形式に対応
+  const raidType = parts.length >= 3 ? parts[2] : '';
+  const date = parts.length >= 4 ? parts[3] : '';
   const selectedTime = interaction.values[0];
   await confirmRecruitment(interaction, raidType, date, selectedTime);
 }
@@ -697,7 +719,7 @@ async function showTimeSelection(interaction, raidType, date) {
     const row = new ActionRowBuilder()
       .addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(`recruit_select_${raidType}_${date}`)
+          .setCustomId(`recruit_time_${raidType}_${date}`)
           .setPlaceholder('開催時間を選択してください')
           .addOptions(timeOptions)
       );
