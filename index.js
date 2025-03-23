@@ -690,7 +690,7 @@ async function showTimeSelection(interaction, raidType, date) {
     const row = new ActionRowBuilder()
       .addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(`time_select_${raidType}_${date}`)
+          .setCustomId(`recruit_select_${raidType}_${date}`)
           .setPlaceholder('開催時間を選択してください')
           .addOptions(timeOptions)
       );
