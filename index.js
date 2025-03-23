@@ -149,24 +149,54 @@ const recruitment = activeRecruitments.get(recruitmentId);
 if (recruitment) {
   console.log(`募集データ取得成功: 参加者数=${recruitment.participants.length}`);
   
+  // 既存の参加者でない場合のみ追加
+  const existingParticipant = recruitment.participants.find(p => p.userId === interaction.user.id);
+  if (existingParticipant) {
+    console.log(`ユーザー ${interaction.user.username} は既に参加しています`);
+  } else {
+    // ここが重要: 参加者データの作成と追加
+    const participantData = {
+      userId: interaction.user.id,
+      username: interaction.user.username,
+      joinType: 'なんでも可', // 仮の値
+      attributes: ['火', '水', '土', '風', '光', '闇'], // 仮の値
+      timeAvailability: '23:00', // 仮の値
+      assignedAttribute: null
+    };
+    
+    // 参加者リストに追加
+    recruitment.participants.push(participantData);
+    console.log(`参加者 ${interaction.user.username} を追加しました。新しい参加者数: ${recruitment.participants.length}`);
+    
+    // 重要: 更新されたデータを保存
+    activeRecruitments.set(recruitment.id, recruitment);
+    
+    // 募集メッセージの更新
+    await updateRecruitmentMessage(recruitment);
+    console.log(`募集メッセージを更新しました: ID=${recruitment.id}`);
+  }
+} else {
+  console.log(`エラー: 募集 ${recruitmentId} が見つかりません`);
+}
+  
   // joinType, selectedAttributes, timeAvailabilityの情報をユーザーデータから取得
   // 仮の値を設定
-  const participantData = {
-    userId: interaction.user.id,
-    username: interaction.user.username,
-    joinType: 'なんでも可', // 仮の値
-    attributes: ['火', '水', '土'], // 仮の値
-    timeAvailability: '20:00', // 仮の値
-    assignedAttribute: null
-  };
+  //const participantData = {
+    //userId: interaction.user.id,
+    //username: interaction.user.username,
+    //joinType: 'なんでも可', // 仮の値
+    //attributes: ['火', '水', '土'], // 仮の値
+    //timeAvailability: '20:00', // 仮の値
+   // assignedAttribute: null
+  //};
   
   // 参加者リストに追加
-  recruitment.participants.push(participantData);
-  console.log(`参加者を追加しました。新しい参加者数: ${recruitment.participants.length}`);
+ // recruitment.participants.push(participantData);
+//  console.log(`参加者を追加しました。新しい参加者数: ${recruitment.participants.length}`);
   
   // 募集メッセージの更新
-  await updateRecruitmentMessage(recruitment);
-}
+ // await updateRecruitmentMessage(recruitment);
+//}
 
           // 確認メッセージ
           await interaction.editReply({
