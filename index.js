@@ -1150,8 +1150,10 @@ async function showJoinConfirmation(interaction, recruitmentId, joinType, select
   
   // 募集締め切り処理
   async function closeRecruitment(interaction, recruitmentId) {
+    console.log(`募集締め切り処理を開始: ${recruitmentId}`);
     const recruitment = activeRecruitments.get(recruitmentId);
     if (!recruitment) {
+      console.log(`締め切り失敗: 募集ID ${recruitmentId} が見つかりません`);
       return await interaction.reply({
         content: 'この募集は存在しません。',
         ephemeral: true
@@ -1160,19 +1162,26 @@ async function showJoinConfirmation(interaction, recruitmentId, joinType, select
   
     // 募集者以外は締め切れないようにする
     if (interaction.user.id !== recruitment.creator) {
+      console.log(`締め切り拒否: ユーザー ${interaction.user.id} は募集者ではありません`);
       return await interaction.reply({
         content: '募集者のみが募集を締め切ることができます。',
         ephemeral: true
       });
     }
-  
+    
+    console.log(`募集ステータスを変更: ${recruitment.status} -> closed`);
     recruitment.status = 'closed';
   
     // 属性の自動割り振りを実行
+    console.log(`属性の自動割り振りを開始: 参加者数=${recruitment.participants.length}`);
     await autoAssignAttributes(recruitment);
+    console.log('属性の自動割り振りが完了しました');
+
   
     // 募集メッセージの更新
+    console.log('募集メッセージの更新を開始');
     await updateRecruitmentMessage(recruitment);
+    console.log('募集メッセージの更新が完了しました');
   
     await interaction.reply({
       content: '募集を締め切り、属性の割り振りを行いました。',
@@ -1215,8 +1224,15 @@ async function updateRecruitmentMessage(recruitment) {
       if (recruitment.status === 'active') {
         description += '🟢 **募集中**\n参加希望の方は下のボタンから申し込んでください。\n\n';
       } else if (recruitment.status === 'closed' || recruitment.status === 'assigned') {
-        description += '🔴 **募集終了**\n以下の通り参加者を割り振りました。\n\n';
-      }
+        description += '🔴 **募集終了**\n';
+  
+  // 最終的な開催時間と日付を表示
+  if (recruitment.finalTime) {
+    description += `**開催予定時間: ${recruitment.finalTime}**\n`;
+  }
+  
+  description += '以下の通り参加者を割り振りました。\n\n';
+}
   
       // 参加者の詳細リスト（募集中の場合）
       if (recruitment.status === 'active' && recruitment.participants.length > 0) {
@@ -1302,12 +1318,15 @@ async function updateRecruitmentMessage(recruitment) {
   
   // 属性自動割り振り処理
   async function autoAssignAttributes(recruitment) {
+    console.log('=== 属性自動割り振り処理 開始 ===');
     // 割り振りが必要ない場合
     if (recruitment.participants.length === 0) {
+      console.log('参加者がいないため、割り振りをスキップします');
       return;
     }
   
     recruitment.status = 'assigned';
+    console.log(`ステータスを'assigned'に変更しました`);
   
     // 時間帯ごとに参加者をグループ化
     const participantsByTime = {};
@@ -1320,9 +1339,10 @@ async function updateRecruitmentMessage(recruitment) {
   
     // 各時間帯の参加者に対して属性割り振りを実行
     const timeSlots = Object.keys(participantsByTime).sort();
+    console.log(`利用可能な時間枠: ${timeSlots.join(', ')}`);
   
     // 最適な時間帯を見つける（参加者が最も多い時間帯）
-    let bestTimeSlot = timeSlots[0];
+    let bestTimeSlot = timeSlots[0] || 'デフォルト';
     let maxParticipants = 0;
   
     timeSlots.forEach(timeSlot => {
@@ -1337,12 +1357,17 @@ async function updateRecruitmentMessage(recruitment) {
           return true;
         }
       });
+      
+      console.log(`時間枠 ${timeSlot}: ${filteredParticipants.length}名が参加可能`);
   
       if (filteredParticipants.length > maxParticipants) {
         maxParticipants = filteredParticipants.length;
         bestTimeSlot = timeSlot;
       }
     });
+    
+    console.log(`最適な時間枠: ${bestTimeSlot} (参加者数: ${maxParticipants}名)`);
+    
       // 一番参加者が多い時間帯のレイドタイプを決定（参加者希望の場合のみ）
   let raidTypeToAssign = recruitment.type;
   if (recruitment.type === '参加者希望') {
@@ -1367,11 +1392,13 @@ async function updateRecruitmentMessage(recruitment) {
       return p.joinType === 'ルシゼロ' || p.joinType === 'なんでも可';
     }
   });
-
+  console.log(`割り振り対象参加者数: ${eligibleParticipants.length}名`);
   // 属性の割り振り処理
   const assignments = {};
+  console.log('=== 属性割り振り結果 ===');
   attributes.forEach(attr => {
-    assignments[attr] = null;
+    const assigned = recruitment.participants.find(p => p.assignedAttribute === attr);
+    console.log(`${attr}: ${assigned ? assigned.username : '未割り当て'}`);
   });
 
   // 優先順位付け：
@@ -1380,23 +1407,35 @@ async function updateRecruitmentMessage(recruitment) {
 
   // 参加者を属性選択数で並べ替え
   eligibleParticipants.sort((a, b) => a.attributes.length - b.attributes.length);
-
+// 各参加者用のデバッグ情報
+eligibleParticipants.forEach((p, index) => {
+  console.log(`参加者${index + 1}: ${p.username}, 希望属性: [${p.attributes.join(', ')}], 属性数: ${p.attributes.length}`);
+});
+  
+  
   // 各参加者について、選択した属性のうち最も希望者が少ない属性に割り当て
   for (const participant of eligibleParticipants) {
     // この参加者が選択した属性で、まだ割り当てられていないものを探す
     const availableAttributes = participant.attributes.filter(attr => !assignments[attr]);
-
+    console.log(`${participant.username}の利用可能な属性: [${availableAttributes.join(', ')}]`);
+    
     if (availableAttributes.length > 0) {
       // 利用可能な属性から一つ選択
       const chosenAttribute = availableAttributes[0];
       assignments[chosenAttribute] = participant;
       participant.assignedAttribute = chosenAttribute;
+      console.log(`${participant.username}を${chosenAttribute}属性に割り当てました`);
+    } else {
+      console.log(`${participant.username}に割り当て可能な属性がありません`);
     }
   }
 
   // 埋まっていない属性を、まだ割り当てられていない参加者で埋める
   const unassignedParticipants = eligibleParticipants.filter(p => !p.assignedAttribute);
   const emptyAttributes = attributes.filter(attr => !assignments[attr]);
+  
+  console.log(`未割り当て参加者: ${unassignedParticipants.length}名`);
+  console.log(`空の属性: [${emptyAttributes.join(', ')}]`);
 
   for (let i = 0; i < Math.min(unassignedParticipants.length, emptyAttributes.length); i++) {
     const participant = unassignedParticipants[i];
@@ -1412,14 +1451,17 @@ async function updateRecruitmentMessage(recruitment) {
     const assignedParticipant = eligibleParticipants.find(p => p.userId === participant.userId);
     if (assignedParticipant && assignedParticipant.assignedAttribute) {
       participant.assignedAttribute = assignedParticipant.assignedAttribute;
+      console.log(`元のリストで ${participant.username} を ${participant.assignedAttribute} に設定しました`);
     } else {
       participant.assignedAttribute = null;
+      console.log(`${participant.username} は割り当てられませんでした`);
     }
   }
 
   // 時間とレイドタイプを更新
   recruitment.finalTime = bestTimeSlot;
   recruitment.finalRaidType = raidTypeToAssign;
+  console.log(`最終開催時間: ${bestTimeSlot}, 最終レイドタイプ: ${raidTypeToAssign}`);
 
   return recruitment;
 }
