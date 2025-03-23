@@ -449,7 +449,12 @@ async function confirmRecruitment(interaction, raidType, date, time) {
     day: 'numeric'
   });
 
-  const recruitmentId = generateUniqueId();
+  // 一貫したIDを生成 (Math.randomによる不一致を防ぐ)
+  const timestamp = Date.now();
+  const recruitmentId = `${timestamp}-${Math.random().toString(36).substring(2, 9)}`;
+  
+  // IDをログ出力して追跡しやすくする
+  console.log(`募集確認 - ID生成: ${recruitmentId}`);
 
   const embed = new EmbedBuilder()
     .setTitle('🔍 募集内容確認')
@@ -487,7 +492,7 @@ async function confirmRecruitment(interaction, raidType, date, time) {
     channel: interaction.channelId,
     messageId: null,
     createdAt: new Date().toISOString(),
-    expiresat: new Date(date) //%20%E9%96%8B%E5%82%AC%E6%97%A5%E3%81%AE%E6%9C%9D8%E6%99%82%E3%82%92%E6%98%8E%E7%A4%BA%E7%9A%84%E3%81%AB%E8%A8%AD%E5%AE%9A
+   //%20%E9%96%8B%E5%82%AC%E6%97%A5%E3%81%AE%E6%9C%9D8%E6%99%82%E3%82%92%E6%98%8E%E7%A4%BA%E7%9A%84%E3%81%AB%E8%A8%AD%E5%AE%9A
   };
 
   activeRecruitments.set(recruitmentId, recruitmentData);
@@ -1246,6 +1251,12 @@ async function autoAssignAttributes(recruitment) {
 function checkAutomaticClosing() {
   const now = new Date();
 
+  // 現在のアクティブな募集数をログ
+  const activeCount = Array.from(activeRecruitments.values())
+    .filter(r => r.status === 'active').length;
+  console.log(`[自動締め切り] チェック開始 - アクティブ募集数: ${activeCount}`);
+
+  
   activeRecruitments.forEach(async (recruitment, id) => {
     // activeな募集のみ処理
     if (recruitment.status !== 'active') return;
@@ -1253,26 +1264,46 @@ function checkAutomaticClosing() {
     const raidDate = new Date(recruitment.date);
     raidDate.setHours(8, 0, 0, 0); // 開催日の朝8時
     
-    console.log(`募集ID: ${id} - チェック中 (現在: ${now.toISOString()}, 締切時刻: ${raidDate.toISOString()})`);
-
-    // 開催日の朝8時を過ぎている場合のみ、自動締め切り
-    if (now >= raidDate) {
-      console.log(`募集ID ${id} を自動締め切りします (開催日の朝8時)`);
+    
+    // 日付比較のデバッグ
+    const isTimeToClose = now >= raidDate;
+    if (isTimeToClose) {
+      console.log(`[自動締め切り] 募集ID: ${id} - 締切時刻を過ぎています`);
+      console.log(`[自動締め切り] 募集日: ${recruitment.date}, 締切時刻: ${raidDate.toISOString()}`);
+      console.log(`[自動締め切り] 現在時刻: ${now.toISOString()}`);
       
-      recruitment.status = 'closed';
-      await autoAssignAttributes(recruitment);
-      await updateRecruitmentMessage(recruitment);
-
-      // 終了メッセージを送信
       try {
+        // 状態を変更
+        console.log(`[自動締め切り] ステータスを closed に変更`);
+        recruitment.status = 'closed';
+        activeRecruitments.set(id, recruitment);
+        
+        // 属性割り振り
+        console.log(`[自動締め切り] 属性割り振り開始`);
+        await autoAssignAttributes(recruitment);
+        
+        // メッセージ更新
+        console.log(`[自動締め切り] メッセージ更新`);
+        await updateRecruitmentMessage(recruitment);
+
+        // 終了メッセージ
+        console.log(`[自動締め切り] 終了メッセージ送信`);
         const channel = await client.channels.fetch(recruitment.channel);
         if (channel) {
           await channel.send({
             content: `<@${recruitment.creator}> **【自動締め切り】** ${recruitment.type}募集が締め切られ、参加者が割り振られました。`
           });
+          console.log(`[自動締め切り] 完了 - ID: ${id}`);
         }
       } catch (error) {
-        console.error('自動締め切りメッセージ送信エラー:', error);
+        console.error(`[自動締め切り] エラー発生: ${error.message}`);
+      }
+    } else {
+      // 一定の間隔でデバッグ情報を出力（すべての募集で毎回出力すると多すぎるので）
+      const minutes = now.getMinutes();
+      if (minutes % 10 === 0) { // 10分ごとに出力
+        console.log(`[自動締め切り] 募集ID ${id} - まだ締切時刻ではありません`);
+        console.log(`[自動締め切り] 締切予定: ${raidDate.toISOString()}`);
       }
     }
   });
