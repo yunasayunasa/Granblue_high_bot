@@ -964,7 +964,7 @@ async function showJoinOptions(interaction, recruitmentId) {
       ];
   
       // timeflowと同じパターンのカスタムID
-      const customId = `timemenu_${recruitmentId}`;
+      const customId = `time_availability_${recruitmentId}_${joinType}_${selectedAttributes.join(',')}`;
       console.log(`使用するカスタムID: ${customId}`);
   
       // UIコンポーネント
