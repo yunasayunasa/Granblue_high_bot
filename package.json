@@ -1,20 +1,24 @@
 {
-	"name": "gbf-raid-bot",
+	"name": "granblue-raid-bot",
 	"version": "1.0.0",
-	"description": "グランブルーファンタジー高難易度募集ボット",
+	"description": "グラブル高難易度レイド募集Discord Bot",
 	"main": "index.js",
 	"scripts": {
 	  "start": "node index.js",
-	  "dev": "nodemon index.js"
+	  "dev": "nodemon index.js",
+	  "test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"engines": {
+	  "node": "16.x"
 	},
 	"dependencies": {
-	  "discord.js": "^14.13.0",
-	  "dotenv": "^16.3.1"
+	  "discord.js": "^14.9.0",
+	  "dotenv": "^16.0.3",
+	  "express": "^4.18.2"
 	},
 	"devDependencies": {
 	  "nodemon": "^2.0.22"
 	},
-	"engines": {
-	  "node": ">=16.9.0"
-	}
+	"author": "yunasayunasa",
+	"license": "MIT"
   }
