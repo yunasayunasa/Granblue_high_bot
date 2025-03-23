@@ -133,6 +133,12 @@ client.on('interactionCreate', async interaction => {
           return;
         }
         
+        // confirm_join_の場合もハンドラに渡す
+  if (interaction.customId.startsWith('confirm_join_')) {
+    await handleButtonInteraction(interaction);
+    return;
+  }
+        
         console.log('確認ボタンを検出: ' + interaction.customId);
         
         try {
@@ -557,11 +563,37 @@ client.on('messageCreate', async message => {
       await closeRecruitment(interaction, recruitmentId);
     }
     // 参加確定ボタン
-    else if (customId.startsWith('confirm_join_')) {
-      const [_, __, recruitmentId, joinType, attributesStr, timeAvailability] = customId.split('_');
-      const selectedAttributes = attributesStr.split(',');
+else if (customId.startsWith('confirm_join_')) {
+  try {
+    console.log(`参加確定ボタン検出: ${customId}`);
+    const parts = customId.split('_');
+    // confirm_join_RECRUITMENTID_JOINTYPE_ATTRIBUTES_TIME という形式を想定
+    if (parts.length >= 3) {
+      const recruitmentId = parts[2]; // 3番目の要素が実際の募集ID
+      const joinType = parts.length >= 4 ? parts[3] : '';
+      const attributesStr = parts.length >= 5 ? parts[4] : '';
+      const timeAvailability = parts.length >= 6 ? parts[5] : '';
+      
+      console.log(`抽出された募集情報: ID=${recruitmentId}, タイプ=${joinType}, 属性=${attributesStr}, 時間=${timeAvailability}`);
+      
+      const selectedAttributes = attributesStr ? attributesStr.split(',') : [];
       await confirmParticipation(interaction, recruitmentId, joinType, selectedAttributes, timeAvailability);
+    } else {
+      console.error(`不正な確定ボタンID形式: ${customId}`);
+      await interaction.update({
+        content: 'エラー: 不正なボタン形式です。もう一度最初からお試しください。',
+        embeds: [],
+        components: []
+      });
     }
+  } catch (error) {
+    console.error('参加確定処理エラー:', error);
+    await interaction.reply({
+      content: 'エラーが発生しました。もう一度お試しください。',
+      ephemeral: true
+    }).catch(e => console.log('エラー応答失敗:', e.message));
+  }
+}
     // 参加申込キャンセルボタン
     else if (customId === 'cancel_join') {
       await interaction.update({
@@ -607,9 +639,13 @@ if (customId.startsWith('recruit_time_') || customId.startsWith('recruit_select_
   else if (customId.startsWith('attribute_select_')) {
     console.log(`属性選択カスタムID: ${customId}`);
     
-    const [_, __, recruitmentId, joinType] = customId.split('_');
-    const selectedAttributes = interaction.values;
-    await showTimeAvailabilitySelection(interaction, recruitmentId, joinType, selectedAttributes);
+    try {
+      const [_, __, recruitmentId, joinType] = customId.split('_');
+      const selectedAttributes = interaction.values;
+      await showTimeAvailabilitySelection(interaction, recruitmentId, joinType, selectedAttributes);
+    } catch (error) {
+      console.error('属性選択処理エラー:', error);
+    }
   }
   // 参加可能時間選択
   else if (customId.startsWith('time_availability_')) {
