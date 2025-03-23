@@ -190,64 +190,69 @@ client.on('interactionCreate', async interaction => {
       }
       
       // 時間選択メニュー処理
-    if (interaction.customId.startsWith('timemenu_')) {
-       console.log('募集作成用時間選択を検出');
-        const [_, __, raidType, date] = interaction.customId.split('_');
-        const selectedTime = interaction.values[0];
-        await confirmRecruitment(interaction, raidType, date, selectedTime);
-        return; // 処理後に早期リターン
-    }
-        try {
-          // deferUpdateで応答の時間を確保
-          await interaction.deferUpdate();
-          console.log('本番時間選択 deferUpdate成功');
+// 募集作成用時間選択メニュー処理
+else if (interaction.customId.startsWith('timemenu_')) {
+  console.log('募集作成用時間選択を検出');
+  const [_, raidType, date] = interaction.customId.split('_').slice(1);
+  const selectedTime = interaction.values[0];
+  await confirmRecruitment(interaction, raidType, date, selectedTime);
+  return; // 処理後に早期リターン
+}
 
-          // 選択された時間
-          const selectedTime = interaction.values[0];
-          console.log(`本番選択時間: ${selectedTime}`);
+// 参加者用時間選択メニュー処理
+else if (interaction.customId.startsWith('time_')) {
+  try {
+    // deferUpdateで応答の時間を確保
+    await interaction.deferUpdate();
+    console.log('本番時間選択 deferUpdate成功');
 
-          // recruitmentIdを抽出
-          const recruitmentId = interaction.customId.split('_')[1];
-          console.log(`本番recruitmentId: ${recruitmentId}`);
+    // 選択された時間
+    const selectedTime = interaction.values[0];
+    console.log(`本番選択時間: ${selectedTime}`);
 
-          // 確認ボタン
-          const confirmRow = new ActionRowBuilder()
-            .addComponents(
-              new ButtonBuilder()
-                .setCustomId(`confirm_${recruitmentId}`)
-                .setLabel('参加を確定する')
-                .setStyle(ButtonStyle.Success)
-            );
+    // recruitmentIdを抽出
+    const recruitmentId = interaction.customId.split('_')[1];
+    console.log(`本番recruitmentId: ${recruitmentId}`);
 
-          // 応答
-          await interaction.editReply({
-            content: `時間「${selectedTime}」を選択しました。参加を確定しますか？`,
-            components: [confirmRow],
-            embeds: []
-          });
+    // 確認ボタン
+    const confirmRow = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`confirm_${recruitmentId}`)
+          .setLabel('参加を確定する')
+          .setStyle(ButtonStyle.Success)
+      );
 
-          console.log('本番時間選択 確認ボタン表示成功');
-        } catch (error) {
-          console.error('本番時間選択エラー:', error);
-          console.error('エラー詳細:', error.message);
-          console.error('スタックトレース:', error.stack);
-          
-          handleErrorReply(interaction, error);
-        }
-        return;
-      }
-      
-      // 監視用のログ
-      debugLog('MONITOR', `セレクトメニュー検出: ${interaction.customId}`, {
-        guildId: interaction.guildId,
-        channelId: interaction.channelId,
-        userId: interaction.user.id,
-        values: interaction.values
-      });
-      
-      // その他のセレクトメニューは専用関数で処理
-      await handleSelectMenuInteraction(interaction);
-    }
+    // 応答
+    await interaction.editReply({
+      content: `時間「${selectedTime}」を選択しました。参加を確定しますか？`,
+      components: [confirmRow],
+      embeds: []
+    });
+
+    console.log('本番時間選択 確認ボタン表示成功');
+  } catch (error) {
+    console.error('本番時間選択エラー:', error);
+    console.error('エラー詳細:', error.message);
+    console.error('スタックトレース:', error.stack);
+    
+    handleErrorReply(interaction, error);
+  }
+  return;
+}
+
+// 監視用のログ
+debugLog('MONITOR', `セレクトメニュー検出: ${interaction.customId}`, {
+  guildId: interaction.guildId,
+  channelId: interaction.channelId,
+  userId: interaction.user.id,
+  values: interaction.values
+});
+
+// その他のセレクトメニューは専用関数で処理
+await handleSelectMenuInteraction(interaction);
+}
+
   } catch (error) {
     console.error('インタラクション処理エラー:', error);
     handleErrorReply(interaction, error);
