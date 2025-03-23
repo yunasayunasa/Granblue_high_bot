@@ -141,9 +141,33 @@ client.on('interactionCreate', async interaction => {
           console.log('確認ボタン deferReply成功');
           
           // recruitmentIdを抽出
-          const recruitmentId = interaction.customId.split('_')[1];
+          const recruitmentId = interaction.customId.replace('confirm_', '');
           console.log(`確認ボタン recruitmentId: ${recruitmentId}`);
+// ここで参加処理を実装
+const recruitment = activeRecruitments.get(recruitmentId);
           
+if (recruitment) {
+  console.log(`募集データ取得成功: 参加者数=${recruitment.participants.length}`);
+  
+  // joinType, selectedAttributes, timeAvailabilityの情報をユーザーデータから取得
+  // 仮の値を設定
+  const participantData = {
+    userId: interaction.user.id,
+    username: interaction.user.username,
+    joinType: 'なんでも可', // 仮の値
+    attributes: ['火', '水', '土'], // 仮の値
+    timeAvailability: '20:00', // 仮の値
+    assignedAttribute: null
+  };
+  
+  // 参加者リストに追加
+  recruitment.participants.push(participantData);
+  console.log(`参加者を追加しました。新しい参加者数: ${recruitment.participants.length}`);
+  
+  // 募集メッセージの更新
+  await updateRecruitmentMessage(recruitment);
+}
+
           // 確認メッセージ
           await interaction.editReply({
             content: '参加が確認されました。ありがとうございます！',
@@ -216,8 +240,18 @@ else if (interaction.customId.startsWith('time_')) {
     console.log(`本番選択時間: ${selectedTime}`);
 
     // recruitmentIdを抽出
-    const recruitmentId = interaction.customId.split('_')[1];
+    const parts = interaction.customId.split('_');
+    let recruitmentId = '';
     console.log(`本番recruitmentId: ${recruitmentId}`);
+    
+// time_availability_の形式なら別途処理
+if (interaction.customId.startsWith('time_availability_') && parts.length >= 3) {
+  recruitmentId = parts[2]; // time_availability_RECRUITMENTID_...
+  console.log(`参加確認用 recruitmentId: ${recruitmentId}`);
+} else {
+  recruitmentId = parts[1] || '';
+  console.log(`一般時間選択 recruitmentId: ${recruitmentId}`);
+}
 
     // 確認ボタン
     const confirmRow = new ActionRowBuilder()
