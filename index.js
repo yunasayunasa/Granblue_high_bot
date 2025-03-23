@@ -372,48 +372,6 @@ async function startRecruitment(message) {
   }, 30 * 60 * 1000); // 30分後
 }
 
-// 募集開始処理
-//async function startRecruitment(message) {
-  // レイドタイプ選択ボタン
-  //const row = new ActionRowBuilder()
-   // .addComponents(
-    //  ...raidTypes.map(type =>
-    //    new ButtonBuilder()
-   //       .setCustomId(`raid_type_${type}`)
-    //      .setLabel(type)
-    //      .setStyle(ButtonStyle.Primary)
-   //   )
-  //  );
-
- // const embed = new EmbedBuilder()
-//    .setTitle('🔰 高難易度募集作成')
-  //  .setDescription('募集するレイドタイプを選択してください。')
-  //  .setColor('#0099ff');
-
-//  const response = await message.reply({
-  //  embeds: [embed],
- //   components: [row]
- // });
-
-  // 30分後に自動的にボタンを無効化
-  //setTimeout(() => {
-   // const disabledRow = new ActionRowBuilder()
-  //    .addComponents(
-   //     ...raidTypes.map(type =>
-     //     new ButtonBuilder()
-     //       .setCustomId(`raid_type_${type}`)
-     //       .setLabel(type)
-      //      .setStyle(ButtonStyle.Primary)
-   //         .setDisabled(true)
-    //    )
-  //    );
-
-  //  response.edit({
-    //  embeds: [embed.setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')],
-  //    components: [disabledRow]
-   // }).catch(console.error);
- // }, 30 * 60 * 1000); // 30
-//}
 
 // 日付選択UI表示
 async function showDateSelection(interaction, raidType) {
@@ -528,7 +486,8 @@ async function confirmRecruitment(interaction, raidType, date, time) {
     status: 'pending',
     channel: interaction.channelId,
     messageId: null,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    expiresat: new Date(date) //%20%E9%96%8B%E5%82%AC%E6%97%A5%E3%81%AE%E6%9C%9D8%E6%99%82%E3%82%92%E6%98%8E%E7%A4%BA%E7%9A%84%E3%81%AB%E8%A8%AD%E5%AE%9A
   };
 
   activeRecruitments.set(recruitmentId, recruitmentData);
@@ -1318,38 +1277,6 @@ function checkAutomaticClosing() {
     }
   });
 }
-// 自動締め切りチェック
-/*function checkAutomaticClosing() {
-  const now = new Date();
-
-  activeRecruitments.forEach(async (recruitment, id) => {
-    if (recruitment.status !== 'active') return;
-
-    const raidDate = new Date(recruitment.date);
-    raidDate.setHours(8, 0, 0, 0); // 開催日の朝8時
-
-    // 開催日の朝8時を過ぎている場合、自動締め切り
-    if (now >= raidDate) {
-      console.log(`募集ID ${id} を自動締め切りします`);
-      
-      recruitment.status = 'closed';
-      await autoAssignAttributes(recruitment);
-      await updateRecruitmentMessage(recruitment);
-
-      // 終了メッセージを送信
-      try {
-        const channel = await client.channels.fetch(recruitment.channel);
-        if (channel) {
-          await channel.send({
-            content: `<@${recruitment.creator}> **【自動締め切り】** ${recruitment.type}募集が締め切られ、参加者が割り振られました。`
-          });
-        }
-      } catch (error) {
-        console.error('自動締め切りメッセージ送信エラー:', error);
-      }
-    }
-  });
-}*/
 
 // 募集リスト表示機能
 async function showActiveRecruitments(message) {
@@ -1507,6 +1434,8 @@ async function showAllRecruitmentDetails(message) {
     debugInfo += `- メッセージID: ${data.messageId}\n`;
     debugInfo += `- 参加者数: ${data.participants.length}名\n\n`;
   });
+  
+  
 
   // 長さ制限があるので、2000文字以上なら分割
   if (debugInfo.length > 1900) {
