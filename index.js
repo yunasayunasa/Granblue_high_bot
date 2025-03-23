@@ -143,101 +143,35 @@ client.on('interactionCreate', async interaction => {
           // recruitmentIdを抽出
           const recruitmentId = interaction.customId.replace('confirm_', '');
           console.log(`確認ボタン recruitmentId: ${recruitmentId}`);
-// 募集IDでデータを検索（完全IDと部分IDの両方で試行）
-let recruitment = null;
-    
-// まずは直接IDで検索
-recruitment = activeRecruitments.get(recruitmentId);
-
-// 見つからない場合、フルIDで検索
-if (!recruitment) {
-  const fullId = `${recruitmentId}_${interaction.user.id}`;
-  recruitment = activeRecruitments.get(fullId);
-  console.log(`フルIDで再検索: ${fullId}, 結果: ${recruitment ? '成功' : '失敗'}`);
-}
-
-// それでも見つからない場合は全ての募集をチェック
-if (!recruitment) {
-  console.log('全ての募集IDを検索中...');
-  for (const [id, data] of activeRecruitments.entries()) {
-    console.log(`- 募集ID: ${id}`);
-    if (id.startsWith(recruitmentId)) {
-      recruitment = data;
-      console.log(`部分一致で募集を発見: ${id}`);
-      break;
-    }
-  }
-}
-
+// ここで参加処理を実装
+const recruitment = activeRecruitments.get(recruitmentId);
+          
 if (recruitment) {
-  console.log(`募集データ取得成功: ID=${recruitment.id}, 参加者数=${recruitment.participants.length}`);
-  
-  
-  // 既存の参加者でない場合のみ追加
-  const existingParticipant = recruitment.participants.find(p => p.userId === interaction.user.id);
-  if (existingParticipant) {
-    console.log(`ユーザー ${interaction.user.username} は既に参加しています`);
-  } else {
-    // ここが重要: 参加者データの作成と追加
-    const participantData = {
-      userId: interaction.user.id,
-      username: interaction.user.username,
-      joinType: 'なんでも可', // 仮の値
-      attributes: ['火', '水', '土', '風', '光', '闇'], // 仮の値
-      timeAvailability: '23:00', // 仮の値
-      assignedAttribute: null
-    };
-    
-    // 参加者リストに追加
-    recruitment.participants.push(participantData);
-    console.log(`参加者 ${interaction.user.username} を追加しました。新しい参加者数: ${recruitment.participants.length}`);
-    
-    // 重要: 更新されたデータを保存
-    activeRecruitments.set(recruitment.id, recruitment);
-    console.log(`更新された募集データを保存: ID=${recruitment.id}, 新しい参加者数=${recruitment.participants.length}`);
-    
-    // 募集メッセージの更新
-    await updateRecruitmentMessage(recruitment).catch(err => {
-    console.error('メッセージ更新エラー:', err.message);
-        });
-      }
+  console.log(`募集データ取得成功: 参加者数=${recruitment.participants.length}`);
   
   // joinType, selectedAttributes, timeAvailabilityの情報をユーザーデータから取得
   // 仮の値を設定
-  //const participantData = {
-    //userId: interaction.user.id,
-    //username: interaction.user.username,
-    //joinType: 'なんでも可', // 仮の値
-    //attributes: ['火', '水', '土'], // 仮の値
-    //timeAvailability: '20:00', // 仮の値
-   // assignedAttribute: null
-  //};
+  const participantData = {
+    userId: interaction.user.id,
+    username: interaction.user.username,
+    joinType: 'なんでも可', // 仮の値
+    attributes: ['火', '水', '土'], // 仮の値
+    timeAvailability: '20:00', // 仮の値
+    assignedAttribute: null
+  };
   
   // 参加者リストに追加
- // recruitment.participants.push(participantData);
-//  console.log(`参加者を追加しました。新しい参加者数: ${recruitment.participants.length}`);
+  recruitment.participants.push(participantData);
+  console.log(`参加者を追加しました。新しい参加者数: ${recruitment.participants.length}`);
   
   // 募集メッセージの更新
- // await updateRecruitmentMessage(recruitment);
-//}
+  await updateRecruitmentMessage(recruitment);
+}
 
           // 確認メッセージ
           await interaction.editReply({
             content: '参加が確認されました。ありがとうございます！',
-          }).catch(err => {
-            console.error('確認メッセージ送信エラー:', err.message);
           });
-        } else {
-          console.log(`エラー: 募集 ${recruitmentId} が見つかりません`);
-          const allIds = Array.from(activeRecruitments.keys()).join(', ');
-          console.log(`登録されている全募集ID: ${allIds}`);
-          
-          await interaction.editReply({
-            content: 'エラー: 募集データが見つかりません。管理者にお問い合わせください。',
-          }).catch(err => {
-            console.error('エラーメッセージ送信エラー:', err.message);
-          });
-        }
           
           console.log('確認メッセージ送信成功');
         } catch (error) {
@@ -295,38 +229,29 @@ const date = parts.length >= 4 ? parts[3] : '';
 }
 
 // 参加者用時間選択メニュー処理
-else if (interaction.customId.startsWith('time_availability_')) {
+else if (interaction.customId.startsWith('time_')) {
   try {
     // deferUpdateで応答の時間を確保
-    await interaction.deferUpdate().catch(e => 
-      console.log('deferUpdate失敗（無視します）:', e.message)
-    );
+    await interaction.deferUpdate();
     console.log('本番時間選択 deferUpdate成功');
 
     // 選択された時間
     const selectedTime = interaction.values[0];
     console.log(`本番選択時間: ${selectedTime}`);
 
-    // カスタムIDから情報を抽出
+    // recruitmentIdを抽出
     const parts = interaction.customId.split('_');
-    console.log(`カスタムID構成: ${parts.join('|')}`);
-    
     let recruitmentId = '';
+    console.log(`本番recruitmentId: ${recruitmentId}`);
     
-    // time_availability_の形式を処理
-    if (parts.length >= 3) {
-      recruitmentId = parts[2];
-      console.log(`本番recruitmentId: ${recruitmentId}`);
-      console.log(`参加確認用 recruitmentId: ${recruitmentId}`);
-    }
 // time_availability_の形式なら別途処理
-//if (interaction.customId.startsWith('time_availability_') && parts.length >= 3) {
+if (interaction.customId.startsWith('time_availability_') && parts.length >= 3) {
   recruitmentId = parts[2]; // time_availability_RECRUITMENTID_...
   console.log(`参加確認用 recruitmentId: ${recruitmentId}`);
-//} else {
- // recruitmentId = parts[1] || '';
- // console.log(`一般時間選択 recruitmentId: ${recruitmentId}`);
-//}
+} else {
+  recruitmentId = parts[1] || '';
+  console.log(`一般時間選択 recruitmentId: ${recruitmentId}`);
+}
 
     // 確認ボタン
     const confirmRow = new ActionRowBuilder()
@@ -342,8 +267,6 @@ else if (interaction.customId.startsWith('time_availability_')) {
       content: `時間「${selectedTime}」を選択しました。参加を確定しますか？`,
       components: [confirmRow],
       embeds: []
-    }).catch(e => {
-      console.error('editReply失敗:', e.message);
     });
 
     console.log('本番時間選択 確認ボタン表示成功');
@@ -1302,28 +1225,11 @@ async function showJoinConfirmation(interaction, recruitmentId, joinType, select
   // 募集メッセージ更新処理
 async function updateRecruitmentMessage(recruitment) {
     try {
-      if (!recruitment || !recruitment.channel || !recruitment.messageId) {
-        console.log('募集メッセージ更新: 必要な情報が不足しています');
-        return;
-      }
-      const channel = await client.channels.fetch(recruitment.channel).catch(e => {
-        console.error('チャンネル取得エラー:', e.message);
-        return null;
-      });
-      if (!channel)  {
-        console.error(`チャンネルID ${recruitment.channel} が見つかりません`);
-        return;
-      }
+      const channel = await client.channels.fetch(recruitment.channel);
+      if (!channel) return;
   
-      const message = await channel.messages.fetch(recruitment.messageId).catch(e => {
-        console.error('メッセージ取得エラー:', e.message);
-        return null;
-      });
-      
-      if (!message) {
-        console.error(`メッセージID ${recruitment.messageId} が見つかりません`);
-        return;
-      }
+      const message = await channel.messages.fetch(recruitment.messageId);
+      if (!message) return;
   
       const formattedDate = new Date(recruitment.date).toLocaleDateString('ja-JP', {
         year: 'numeric',
@@ -1438,8 +1344,6 @@ async function updateRecruitmentMessage(recruitment) {
         content: recruitment.status === 'active' ? '**【募集中】**' : '**【募集終了】**',
         embeds: [embed],
         components: [joinRow]
-      }).catch(e => {
-        console.error('メッセージ編集エラー:', e.message);
       });
     } catch (error) {
       console.error('募集メッセージ更新エラー:', error);
