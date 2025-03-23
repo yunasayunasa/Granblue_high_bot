@@ -1446,11 +1446,10 @@ process.on('unhandledRejection', error => {
   console.error('未処理のPromise拒否:', error);
 });
 
-// Botログイン
-//client.login(process.env.TOKEN).catch(console.error);
+// まず監視サーバーを起動
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // シンプルなヘルスチェックエンドポイント
 app.get('/', (req, res) => {
@@ -1461,3 +1460,12 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`監視用サーバーが起動しました: ポート ${PORT}`);
 });
+
+// その後Botをログイン（サーバー起動とは独立して）
+client.login(process.env.TOKEN)
+  .then(() => {
+    console.log('Botが正常にログインしました');
+  })
+  .catch(error => {
+    console.error('Botログインエラー:', error);
+  });
