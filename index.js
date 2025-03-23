@@ -137,7 +137,9 @@ client.on('interactionCreate', async interaction => {
         
         try {
           // deferReplyで応答の時間を確保
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ ephemeral: true }).catch(e => 
+            console.log('deferReply失敗（無視します）:', e.message)
+          );
           console.log('確認ボタン deferReply成功');
           
           // recruitmentIdを抽出
@@ -798,7 +800,8 @@ if (customId.startsWith('recruit_time_') || customId.startsWith('recruit_select_
   }
   // 時間選択UI表示
 async function showTimeSelection(interaction, raidType, date) {
-    // 時間選択用セレクトメニュー
+   try {
+  // 時間選択用セレクトメニュー
     const row = new ActionRowBuilder()
       .addComponents(
         new StringSelectMenuBuilder()
@@ -821,8 +824,14 @@ async function showTimeSelection(interaction, raidType, date) {
     await interaction.update({
       embeds: [embed],
       components: [row]
+    }).catch(error => {
+      // エラーが発生した場合は無視（ログだけ出力）
+      console.log('時間選択UI表示エラー（無視します）:', error.message);
     });
+  } catch (error) {
+    console.error('時間選択UI表示エラー:', error);
   }
+}
   
   // 募集確認UI表示
   async function confirmRecruitment(interaction, raidType, date, time) {
@@ -882,14 +891,16 @@ async function showTimeSelection(interaction, raidType, date) {
   async function finalizeRecruitment(interaction, recruitmentId) {
     console.log(`募集確定処理開始: ${recruitmentId}`);
   
+    try {
     const recruitment = activeRecruitments.get(recruitmentId);
     if (!recruitment) {
       console.error(`募集データが見つかりません: ${recruitmentId}`);
-      return await interaction.update({
+      await interaction.update({
         content: 'エラー: 募集データが見つかりません。',
         embeds: [],
         components: []
-      });
+      }).catch(e => console.log('更新エラー（無視します）:', e.message));
+      return;
     }
   
     recruitment.status = 'active';
@@ -927,19 +938,25 @@ async function showTimeSelection(interaction, raidType, date) {
           .setStyle(ButtonStyle.Danger)
       );
   
+  try {
     await interaction.update({
       content: '募集を作成しました！',
       embeds: [embed],
       components: [joinRow]
     });
-  
-    // 重要: メッセージIDを正しく保存
+    // 成功した場合のみメッセージIDを保存
     recruitment.messageId = interaction.message.id;
+  } catch (error) {
+    console.log('募集確定UI更新エラー（無視します）:', error.message);
+    // エラーが発生しても処理を続行
+  }
+  
+  
   
     // デバッグログ
     console.log('募集確定情報:');
     console.log(`- 募集ID: ${recruitmentId}`);
-    console.log(`- メッセージID: ${recruitment.messageId}`);
+    console.log(`- メッセージID: ${recruitment.messageId || 'NULL'}`);
     console.log(`- チャンネルID: ${recruitment.channel}`);
   
     // 更新された募集データを保存
@@ -947,8 +964,12 @@ async function showTimeSelection(interaction, raidType, date) {
   
     // データが正しく保存されたか確認
     const savedRecruitment = activeRecruitments.get(recruitmentId);
-    console.log(`保存確認 - メッセージID: ${savedRecruitment?.messageId}`);
+    console.log(`保存確認 - メッセージID: ${savedRecruitment?.messageId || 'NULL'}`);
+  } catch (error) {
+    console.error('募集確定処理エラー:', error);
   }
+}
+  
   // 参加オプション表示
 async function showJoinOptions(interaction, recruitmentId) {
     const recruitment = activeRecruitments.get(recruitmentId);
