@@ -324,8 +324,8 @@ else if (interaction.customId.startsWith('time_availability_')) {
   recruitmentId = parts[2]; // time_availability_RECRUITMENTID_...
   console.log(`参加確認用 recruitmentId: ${recruitmentId}`);
 //} else {
-  recruitmentId = parts[1] || '';
-  console.log(`一般時間選択 recruitmentId: ${recruitmentId}`);
+ // recruitmentId = parts[1] || '';
+ // console.log(`一般時間選択 recruitmentId: ${recruitmentId}`);
 //}
 
     // 確認ボタン
