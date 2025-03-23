@@ -326,7 +326,7 @@ async function handleSelectMenuInteraction(interaction) {
   }
 }
 
-// 募集開始処理
+// 募集開始処理を修正
 async function startRecruitment(message) {
   // レイドタイプ選択ボタン
   const row = new ActionRowBuilder()
@@ -349,7 +349,7 @@ async function startRecruitment(message) {
     components: [row]
   });
 
-  // 30分後に自動的にボタンを無効化
+  // 30分後に募集作成UIのボタンを無効化（募集自体ではなく、作成UIだけ）
   setTimeout(() => {
     const disabledRow = new ActionRowBuilder()
       .addComponents(
@@ -366,8 +366,54 @@ async function startRecruitment(message) {
       embeds: [embed.setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')],
       components: [disabledRow]
     }).catch(console.error);
+    
+    // ここで重要なのは、既に作成された募集には影響を与えないこと
+    // 既存の募集はそのまま残り、8時の自動締め切りまで有効
   }, 30 * 60 * 1000); // 30分後
 }
+
+// 募集開始処理
+//async function startRecruitment(message) {
+  // レイドタイプ選択ボタン
+  //const row = new ActionRowBuilder()
+   // .addComponents(
+    //  ...raidTypes.map(type =>
+    //    new ButtonBuilder()
+   //       .setCustomId(`raid_type_${type}`)
+    //      .setLabel(type)
+    //      .setStyle(ButtonStyle.Primary)
+   //   )
+  //  );
+
+ // const embed = new EmbedBuilder()
+//    .setTitle('🔰 高難易度募集作成')
+  //  .setDescription('募集するレイドタイプを選択してください。')
+  //  .setColor('#0099ff');
+
+//  const response = await message.reply({
+  //  embeds: [embed],
+ //   components: [row]
+ // });
+
+  // 30分後に自動的にボタンを無効化
+  //setTimeout(() => {
+   // const disabledRow = new ActionRowBuilder()
+  //    .addComponents(
+   //     ...raidTypes.map(type =>
+     //     new ButtonBuilder()
+     //       .setCustomId(`raid_type_${type}`)
+     //       .setLabel(type)
+      //      .setStyle(ButtonStyle.Primary)
+   //         .setDisabled(true)
+    //    )
+  //    );
+
+  //  response.edit({
+    //  embeds: [embed.setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')],
+  //    components: [disabledRow]
+   // }).catch(console.error);
+ // }, 30 * 60 * 1000); // 30
+//}
 
 // 日付選択UI表示
 async function showDateSelection(interaction, raidType) {
@@ -1236,8 +1282,44 @@ async function autoAssignAttributes(recruitment) {
   return recruitment;
 }
 
-// 自動締め切りチェック
+
+// 自動締め切りチェック処理も修正して明確にする
 function checkAutomaticClosing() {
+  const now = new Date();
+
+  activeRecruitments.forEach(async (recruitment, id) => {
+    // activeな募集のみ処理
+    if (recruitment.status !== 'active') return;
+
+    const raidDate = new Date(recruitment.date);
+    raidDate.setHours(8, 0, 0, 0); // 開催日の朝8時
+    
+    console.log(`募集ID: ${id} - チェック中 (現在: ${now.toISOString()}, 締切時刻: ${raidDate.toISOString()})`);
+
+    // 開催日の朝8時を過ぎている場合のみ、自動締め切り
+    if (now >= raidDate) {
+      console.log(`募集ID ${id} を自動締め切りします (開催日の朝8時)`);
+      
+      recruitment.status = 'closed';
+      await autoAssignAttributes(recruitment);
+      await updateRecruitmentMessage(recruitment);
+
+      // 終了メッセージを送信
+      try {
+        const channel = await client.channels.fetch(recruitment.channel);
+        if (channel) {
+          await channel.send({
+            content: `<@${recruitment.creator}> **【自動締め切り】** ${recruitment.type}募集が締め切られ、参加者が割り振られました。`
+          });
+        }
+      } catch (error) {
+        console.error('自動締め切りメッセージ送信エラー:', error);
+      }
+    }
+  });
+}
+// 自動締め切りチェック
+/*function checkAutomaticClosing() {
   const now = new Date();
 
   activeRecruitments.forEach(async (recruitment, id) => {
@@ -1267,7 +1349,7 @@ function checkAutomaticClosing() {
       }
     }
   });
-}
+}*/
 
 // 募集リスト表示機能
 async function showActiveRecruitments(message) {
