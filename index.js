@@ -242,16 +242,17 @@ if (recruitment) {
       // 時間選択メニュー処理
 // 募集作成用時間選択メニュー処理
 else if (interaction.customId.startsWith('recruit_time') || 
-interaction.customId.startsWith('recruit_select_') || 
-interaction.customId.startsWith('time_select_')) {
-console.log('募集作成用時間選択を検出');
-const parts = interaction.customId.split('_');
+　　　　　　interaction.customId.startsWith('recruit_select_') || 
+　　　　　　interaction.customId.startsWith('time_select_')) {
+　　
+  　console.log('募集作成用時間選択を検出');
+　　const parts = interaction.customId.split('_');
 // パターンに応じた抽出
-const raidType = parts.length >= 3 ? parts[2] : '';
-const date = parts.length >= 4 ? parts[3] : '';
-  const selectedTime = interaction.values[0];
-  await confirmRecruitment(interaction, raidType, date, selectedTime);
-  return; // 処理後に早期リターン
+　　const raidType = parts.length >= 3 ? parts[2] : '';
+　　const date = parts.length >= 4 ? parts[3] : '';
+  　　const selectedTime = interaction.values[0];
+ 　　 await confirmRecruitment(interaction, raidType, date, selectedTime);
+  　　return; // 処理後に早期リターン
 }
 
 // 参加者用時間選択メニュー処理
@@ -296,6 +297,7 @@ else if (interaction.customId.startsWith('time_availability_')) {
     console.log('参加確認UI表示成功');
     } else {
       console.log('カスタムIDのフォーマットが不正です');
+    }
 
     console.log('本番時間選択 確認ボタン表示成功');
   } catch (error) {
@@ -593,6 +595,36 @@ if (customId.startsWith('recruit_time_') || customId.startsWith('recruit_select_
   await confirmRecruitment(interaction, raidType, date, selectedTime);
 }
     
+　　　// 参加タイプ選択（天元/ルシゼロ/なんでも）
+  else if (customId.startsWith('join_type_select_')) {
+    const recruitmentId = customId.replace('join_type_select_', '');
+    const selectedType = interaction.values[0];
+    await showAttributeSelection(interaction, recruitmentId, selectedType);
+  }
+  // 属性選択
+  else if (customId.startsWith('attribute_select_')) {
+    console.log(`属性選択カスタムID: ${customId}`);
+    
+    const [_, __, recruitmentId, joinType] = customId.split('_');
+    const selectedAttributes = interaction.values;
+    await showTimeAvailabilitySelection(interaction, recruitmentId, joinType, selectedAttributes);
+  }
+  // 参加可能時間選択
+  else if (customId.startsWith('time_availability_')) {
+    const [_, __, recruitmentId, joinType, attributesStr] = customId.split('_');
+    const selectedTime = interaction.values[0];
+    const selectedAttributes = attributesStr.split(',');
+
+    await showJoinConfirmation(
+      interaction,
+      recruitmentId,
+      joinType,
+      selectedAttributes,
+      selectedTime
+    );
+  }
+
+
     // 時間選択メニュー処理
     if (customId.startsWith('time_')) {
       try {
@@ -641,34 +673,23 @@ if (customId.startsWith('recruit_time_') || customId.startsWith('recruit_select_
       const selectedTime = interaction.values[0];
       await confirmRecruitment(interaction, raidType, date, selectedTime);
     }
+    
+    
     // 参加タイプ選択（天元/ルシゼロ/なんでも）
-    else if (customId.startsWith('join_type_select_')) {
-      const recruitmentId = customId.replace('join_type_select_', '');
-      const selectedType = interaction.values[0];
-      await showAttributeSelection(interaction, recruitmentId, selectedType);
-    }
+   // else if (customId.startsWith('join_type_select_')) {
+    //  const recruitmentId = customId.replace('join_type_select_', '');
+    //  const selectedType = interaction.values[0];
+    //  await showAttributeSelection(interaction, recruitmentId, selectedType);
+  //  }
     // 属性選択
-    else if (customId.startsWith('attribute_select_')) {
-      console.log(`属性選択カスタムID: ${customId}`);
+   // else if (customId.startsWith('attribute_select_')) {
+    //  console.log(`属性選択カスタムID: ${customId}`);
       
-      const [_, __, recruitmentId, joinType] = customId.split('_');
-      const selectedAttributes = interaction.values;
-      await showTimeAvailabilitySelection(interaction, recruitmentId, joinType, selectedAttributes);
-    }
-    // 参加可能時間選択
-    else if (customId.startsWith('time_availability_')) {
-      const [_, __, recruitmentId, joinType, attributesStr] = customId.split('_');
-      const selectedTime = interaction.values[0];
-      const selectedAttributes = attributesStr.split(',');
-  
-      await showJoinConfirmation(
-        interaction,
-        recruitmentId,
-        joinType,
-        selectedAttributes,
-        selectedTime
-      );
-    }
+    //  const [_, __, recruitmentId, joinType] = customId.split('_');
+     // const selectedAttributes = interaction.values;
+     // await //showTimeAvailabilitySelection(interaction, recruitmentId, j
+    
+    
     // 属性選択メニュー
     else if (customId.startsWith('attr_')) {
       console.log('属性選択処理');
