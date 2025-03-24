@@ -61,8 +61,8 @@ client.once('ready', () => {
   console.log('デバッグモード: 有効');
   
   // 定期的な処理の開始
-  setInterval(saveRecruitmentData, 5 * 60 * 1000); // 5分ごとにデータ保存
-  setInterval(checkAutomaticClosing, 60 * 1000); // 1分ごとに自動締め切りチェック
+  setInterval(saveRecruitmentData, 10 * 60 * 1000); // 5分ごとにデータ保存
+  setInterval(checkAutomaticClosing, 5 * 60 * 1000); // 1分ごとに自動締め切りチェック
 });
 
 // 募集データの保存処理
@@ -665,7 +665,137 @@ if (customId.startsWith('recruit_time_') || customId.startsWith('recruit_select_
     }
   }
   
-  // 募集開始処理
+  // 募集開始処理を完全修正
+async function startRecruitment(message) {
+  // レイドタイプ選択ボタン
+  const row = new ActionRowBuilder()
+    .addComponents(
+      ...raidTypes.map(type =>
+        new ButtonBuilder()
+          .setCustomId(`raid_type_${type}`)
+          .setLabel(type)
+          .setStyle(ButtonStyle.Primary)
+      )
+    );
+
+  const embed = new EmbedBuilder()
+    .setTitle('🔰 高難易度募集作成')
+    .setDescription('募集するレイドタイプを選択してください。')
+    .setColor('#0099ff');
+
+  const response = await message.reply({
+    embeds: [embed],
+    components: [row]
+  });
+
+  // 30分後に募集作成UIのボタンを無効化（募集自体ではなく、作成UIだけ）
+  setTimeout(() => {
+    const disabledRow = new ActionRowBuilder()
+      .addComponents(
+        ...raidTypes.map(type =>
+          new ButtonBuilder()
+            .setCustomId(`raid_type_${type}`)
+            .setLabel(type)
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(true)
+        )
+      );
+
+    // 新しいEmbedBuilderを作成
+    const timeoutEmbed = new EmbedBuilder()
+      .setTitle('🔰 高難易度募集作成（期限切れ）')
+      .setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')
+      .setColor('#FF6B6B');
+
+    response.edit({
+      embeds: [timeoutEmbed],
+      components: [disabledRow]
+    }).catch(error => {
+      console.error('募集作成UI無効化エラー:', error);
+    });
+    
+    console.log(`[募集作成UI] ${message.author.tag}の募集作成UIを無効化しました（タイムアウト）`);
+    console.log(`[募集作成UI] アクティブな募集数: ${activeRecruitments.size}`);
+  }, 30 * 60 * 1000); // 30分後
+}
+
+// 募集確定処理を修正 - 新規メッセージとして作成する
+async function finalizeRecruitment(interaction, recruitmentId) {
+  console.log(`募集確定処理開始: ${recruitmentId}`);
+
+  const recruitment = activeRecruitments.get(recruitmentId);
+  if (!recruitment) {
+    console.error(`募集データが見つかりません: ${recruitmentId}`);
+    return await interaction.update({
+      content: 'エラー: 募集データが見つかりません。',
+      embeds: [],
+      components: []
+    });
+  }
+
+  recruitment.status = 'active';
+  
+  const formattedDate = new Date(recruitment.date).toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  const embed = createRecruitmentEmbed(recruitment, formattedDate);
+
+  const joinRow = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`join_recruitment_${recruitmentId}`)
+        .setLabel('参加申込')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`cancel_participation_${recruitmentId}`)
+        .setLabel('参加キャンセル')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`close_recruitment_${recruitmentId}`)
+        .setLabel('募集締め切り')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+  try {
+    // 募集作成UIには完了メッセージを表示
+    await interaction.update({
+      content: '募集を作成しました！以下に作成された募集が表示されます。',
+      embeds: [],
+      components: []
+    });
+
+    // チャンネルを取得
+    const channel = await client.channels.fetch(interaction.channelId);
+    
+    // 新しいメッセージとして募集を送信
+    const recruitMessage = await channel.send({
+      content: '**【募集中】**',
+      embeds: [embed],
+      components: [joinRow]
+    });
+
+    // 新しいメッセージIDを保存
+    recruitment.messageId = recruitMessage.id;
+    
+    // デバッグログ
+    console.log(`募集確定完了: ID=${recruitmentId}, メッセージID=${recruitment.messageId}`);
+    console.log(`募集作成UIのメッセージID: ${interaction.message.id} (別物)`);
+    
+    // 更新された募集データを保存
+    activeRecruitments.set(recruitmentId, recruitment);
+  } catch (error) {
+    console.error('募集確定エラー:', error);
+    await interaction.update({
+      content: '募集の作成中にエラーが発生しました。もう一度お試しください。',
+      embeds: [],
+      components: []
+    });
+  }
+}
+  /* 募集開始処理
   async function startRecruitment(message) {
     // レイドタイプ選択ボタン
     const row = new ActionRowBuilder()
@@ -706,7 +836,7 @@ if (customId.startsWith('recruit_time_') || customId.startsWith('recruit_select_
         components: [disabledRow]
       }).catch(console.error);
     }, 30 * 60 * 1000); // 30分後
-  }
+  }*/
   
   // 日付選択UI表示
   async function showDateSelection(interaction, raidType) {
