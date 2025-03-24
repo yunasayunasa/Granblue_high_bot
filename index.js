@@ -362,10 +362,22 @@ async function startRecruitment(message) {
         )
       );
 
+    // 新しいEmbedBuilderを作成して元のembedに影響を与えないようにする
+    const timeoutEmbed = new EmbedBuilder()
+      .setTitle('🔰 高難易度募集作成')
+      .setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')
+      .setColor('#FF6B6B'); // 色を赤系に変更して期限切れを視覚的に示す
+
     response.edit({
-      embeds: [embed.setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')],
+      embeds: [timeoutEmbed],
       components: [disabledRow]
-    }).catch(console.error);
+    }).catch(error => {
+      console.error('募集作成UI無効化エラー:', error);
+    });
+    
+    // デバッグ用ログ
+    console.log(`[募集作成UI] ${message.author.tag}の募集作成UIを無効化しました（タイムアウト）`);
+    console.log(`[募集作成UI] アクティブな募集数: ${activeRecruitments.size}`);
     
     // ここで重要なのは、既に作成された募集には影響を与えないこと
     // 既存の募集はそのまま残り、8時の自動締め切りまで有効
