@@ -62,10 +62,41 @@ client.once('ready', () => {
   console.log(`${client.user.tag} でログインしました！`);
   console.log('Discord.js バージョン:', require('discord.js').version);
   
+  
+  
   // 定期的な処理の開始
   setInterval(saveRecruitmentData, 10 * 60 * 1000); // 5分ごとにデータ保存
   setInterval(checkAutomaticClosing, 5 * 60 * 1000); // 1分ごとに自動締め切りチェック
+  setInterval(cleanupOldRecruitments, 24 * 60 * 60 * 1000); // 24時間ごとに古い募集をクリーンアップ
+  
+  // 初回のクリーンアップを実行（起動時に一度実行）
+  cleanupOldRecruitments();
 });
+
+// 古い募集のクリーンアップ処理
+function cleanupOldRecruitments() {
+  const now = new Date();
+  let cleanupCount = 0;
+  
+  activeRecruitments.forEach((recruitment, id) => {
+    // 状態ごとに保持期間を設定
+    // - 終了した募集: 3日後に削除
+    // - 全ての募集: 7日以上経過したら削除（安全措置）
+    const recruitmentDate = new Date(recruitment.date);
+    const daysSinceCreation = (now - recruitmentDate) / (1000 * 60 * 60 * 24);
+    
+    const isVeryOld = daysSinceCreation > 7;
+    const isClosedAndOld = (recruitment.status === 'closed' || recruitment.status === 'assigned') && daysSinceCreation > 3;
+    
+    if (isVeryOld || isClosedAndOld) {
+      activeRecruitments.delete(id);
+      cleanupCount++;
+      console.log(`古い募集を削除: ID=${id}, タイプ=${recruitment.type}, 状態=${recruitment.status}, 経過日数=${daysSinceCreation.toFixed(1)}日`);
+    }
+  });
+  
+  console.log(`古い募集 ${cleanupCount}件をクリーンアップしました。残り: ${activeRecruitments.size}件`);
+}
 
 // 募集データの保存処理
 function saveRecruitmentData() {
