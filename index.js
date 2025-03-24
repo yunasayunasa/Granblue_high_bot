@@ -63,8 +63,8 @@ client.once('ready', () => {
   console.log('Discord.js バージョン:', require('discord.js').version);
   
   // 定期的な処理の開始
-  setInterval(saveRecruitmentData, 5 * 60 * 1000); // 5分ごとにデータ保存
-  setInterval(checkAutomaticClosing, 60 * 1000); // 1分ごとに自動締め切りチェック
+  setInterval(saveRecruitmentData, 10 * 60 * 1000); // 5分ごとにデータ保存
+  setInterval(checkAutomaticClosing, 5 * 60 * 1000); // 1分ごとに自動締め切りチェック
 });
 
 // 募集データの保存処理
@@ -326,7 +326,7 @@ async function handleSelectMenuInteraction(interaction) {
   }
 }
 
-// 募集開始処理を修正
+// 募集開始処理を完全修正
 async function startRecruitment(message) {
   // レイドタイプ選択ボタン
   const row = new ActionRowBuilder()
@@ -362,11 +362,11 @@ async function startRecruitment(message) {
         )
       );
 
-    // 新しいEmbedBuilderを作成して元のembedに影響を与えないようにする
+    // 新しいEmbedBuilderを作成
     const timeoutEmbed = new EmbedBuilder()
-      .setTitle('🔰 高難易度募集作成')
+      .setTitle('🔰 高難易度募集作成（期限切れ）')
       .setDescription('この募集作成セッションは期限切れになりました。新しく募集を開始するには `!募集` コマンドを使用してください。')
-      .setColor('#FF6B6B'); // 色を赤系に変更して期限切れを視覚的に示す
+      .setColor('#FF6B6B');
 
     response.edit({
       embeds: [timeoutEmbed],
@@ -375,14 +375,88 @@ async function startRecruitment(message) {
       console.error('募集作成UI無効化エラー:', error);
     });
     
-    // デバッグ用ログ
     console.log(`[募集作成UI] ${message.author.tag}の募集作成UIを無効化しました（タイムアウト）`);
     console.log(`[募集作成UI] アクティブな募集数: ${activeRecruitments.size}`);
-    
-    // ここで重要なのは、既に作成された募集には影響を与えないこと
-    // 既存の募集はそのまま残り、8時の自動締め切りまで有効
   }, 30 * 60 * 1000); // 30分後
 }
+
+// 募集確定処理を修正 - 新規メッセージとして作成する
+async function finalizeRecruitment(interaction, recruitmentId) {
+  console.log(`募集確定処理開始: ${recruitmentId}`);
+
+  const recruitment = activeRecruitments.get(recruitmentId);
+  if (!recruitment) {
+    console.error(`募集データが見つかりません: ${recruitmentId}`);
+    return await interaction.update({
+      content: 'エラー: 募集データが見つかりません。',
+      embeds: [],
+      components: []
+    });
+  }
+
+  recruitment.status = 'active';
+  
+  const formattedDate = new Date(recruitment.date).toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  const embed = createRecruitmentEmbed(recruitment, formattedDate);
+
+  const joinRow = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`join_recruitment_${recruitmentId}`)
+        .setLabel('参加申込')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`cancel_participation_${recruitmentId}`)
+        .setLabel('参加キャンセル')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`close_recruitment_${recruitmentId}`)
+        .setLabel('募集締め切り')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+  try {
+    // 募集作成UIには完了メッセージを表示
+    await interaction.update({
+      content: '募集を作成しました！以下に作成された募集が表示されます。',
+      embeds: [],
+      components: []
+    });
+
+    // チャンネルを取得
+    const channel = await client.channels.fetch(interaction.channelId);
+    
+    // 新しいメッセージとして募集を送信
+    const recruitMessage = await channel.send({
+      content: '**【募集中】**',
+      embeds: [embed],
+      components: [joinRow]
+    });
+
+    // 新しいメッセージIDを保存
+    recruitment.messageId = recruitMessage.id;
+    
+    // デバッグログ
+    console.log(`募集確定完了: ID=${recruitmentId}, メッセージID=${recruitment.messageId}`);
+    console.log(`募集作成UIのメッセージID: ${interaction.message.id} (別物)`);
+    
+    // 更新された募集データを保存
+    activeRecruitments.set(recruitmentId, recruitment);
+  } catch (error) {
+    console.error('募集確定エラー:', error);
+    await interaction.update({
+      content: '募集の作成中にエラーが発生しました。もう一度お試しください。',
+      embeds: [],
+      components: []
+    });
+  }
+}
+
 
 
 // 日付選択UI表示
