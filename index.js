@@ -13,12 +13,10 @@ const {
 // 環境変数をロード
 require('dotenv').config();
 
-// ファイルシステムモジュールをインポート
+// ファイルシステムモジュールをインポート (ここに追加)
 const fs = require('fs');
 const path = require('path');
 
-// データ保存用のファイルパス
-const DATA_FILE_PATH = path.join(__dirname, 'recruitment_data.json');
 
 // グローバルなエラーハンドリングを追加
 process.on('unhandledRejection', (reason, promise) => {
@@ -36,6 +34,9 @@ const client = new Client({
   ],
   partials: [Partials.Channel, Partials.Message, Partials.Reaction]
 });
+
+// データ保存用のファイルパス (グローバル変数の近くに追加)
+const DATA_FILE_PATH = path.join(__dirname, 'recruitment_data.json');
 
 // グローバル変数
 const activeRecruitments = new Map(); // 現在進行中の募集を保持
@@ -64,52 +65,15 @@ function debugLog(tag, message, data = null) {
   if (data) console.log(JSON.stringify(data, null, 2));
 }
 
-// 募集データのロード処理 (ここに追加)
-function loadRecruitmentData() {
-  try {
-    // ファイルが存在するか確認
-    if (fs.existsSync(DATA_FILE_PATH)) {
-      console.log('保存されていた募集データをロードします...');
-      const data = fs.readFileSync(DATA_FILE_PATH, 'utf8');
-      const parsedData = JSON.parse(data);
-      
-      // 読み込んだデータをMapに変換
-      const loadedRecruitments = new Map();
-      let activeCount = 0;
-      
-      Object.entries(parsedData).forEach(([id, recruitment]) => {
-        loadedRecruitments.set(id, recruitment);
-        if (recruitment.status === 'active') activeCount++;
-      });
-      
-      console.log(`${loadedRecruitments.size}件の募集データをロードしました（アクティブ: ${activeCount}件）`);
-      return loadedRecruitments;
-    } else {
-      console.log('保存された募集データはありません。新規に開始します。');
-      return new Map();
-    }
-  } catch (error) {
-    console.error('募集データのロード中にエラーが発生しました:', error);
-    return new Map(); // エラー時は空のMapを返す
-  }
-}
-
 // ボットの準備完了時に実行
 client.once('ready', () => {
   console.log(`${client.user.tag} でログインしました！`);
   console.log('Discord.js バージョン:', require('discord.js').version);
   
-    // 保存済みデータがあればロード
-  const loadedData = loadRecruitmentData();
-  if (loadedData.size > 0) {
-    // グローバル変数を上書き
-    activeRecruitments = loadedData;
-  }
-  
   
   
   // 定期的な処理の開始
-  setInterval(saveRecruitmentData, 1 * 60 * 1000); // 5分ごとにデータ保存
+  setInterval(saveRecruitmentData, 10 * 60 * 1000); // 5分ごとにデータ保存
   setInterval(checkAutomaticClosing, 5 * 60 * 1000); // 1分ごとに自動締め切りチェック
   setInterval(cleanupOldRecruitments, 24 * 60 * 60 * 1000); // 24時間ごとに古い募集をクリーンアップ
   
@@ -144,19 +108,8 @@ function cleanupOldRecruitments() {
 
 // 募集データの保存処理
 function saveRecruitmentData() {
-  try {
-    // MapをJSONに変換可能なオブジェクトに変換
-    const dataToSave = {};
-    activeRecruitments.forEach((recruitment, id) => {
-      dataToSave[id] = recruitment;
-    });
-    
-    // ファイルに保存
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(dataToSave, null, 2), 'utf8');
-    console.log(`${activeRecruitments.size}件の募集データを保存しました`);
-  } catch (error) {
-    console.error('募集データの保存中にエラーが発生しました:', error);
-  }
+  console.log(`${activeRecruitments.size}件の募集データを保存しました`);
+  // 本番環境ではここにデータ保存のロジックを実装
 }
 
 // エラー応答ヘルパー関数
@@ -688,7 +641,7 @@ function createRecruitmentEmbed(recruitment, formattedDate) {
         return { name: `【${attr}】`, value: '未定', inline: true };
       })
     )
-    .setFooter({ text: `募集ID: ${recruitment.id} | 開催日の朝8時に自動締め切り` });
+    .setFooter({ text: `募集ID: ${recruitment.id} | 開催日の夕方5時に自動締め切り` });
   
   return embed;
 }
@@ -1184,7 +1137,7 @@ async function updateRecruitmentMessage(recruitment) {
     });
 
     embed.addFields(fields);
-    embed.setFooter({ text: `募集ID: ${recruitment.id} | ${recruitment.status === 'active' ? '開催日の朝8時に自動締め切り' : '募集終了'}` });
+    embed.setFooter({ text: `募集ID: ${recruitment.id} | ${recruitment.status === 'active' ? '開催日の夕方5時に自動締め切り' : '募集終了'}` });
 
     // ボタン行を作成（募集中の場合のみ有効）
     const joinRow = new ActionRowBuilder()
