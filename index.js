@@ -13,6 +13,13 @@ const {
 // 環境変数をロード
 require('dotenv').config();
 
+// ファイルシステムモジュールをインポート
+const fs = require('fs');
+const path = require('path');
+
+// データ保存用のファイルパス
+const DATA_FILE_PATH = path.join(__dirname, 'recruitment_data.json');
+
 // グローバルなエラーハンドリングを追加
 process.on('unhandledRejection', (reason, promise) => {
   console.error('未処理のPromise拒否:');
