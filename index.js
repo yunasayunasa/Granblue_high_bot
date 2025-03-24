@@ -590,61 +590,6 @@ async function confirmRecruitment(interaction, raidType, date, time) {
   });
 }
 
-// 募集確定処理
-async function finalizeRecruitment(interaction, recruitmentId) {
-  console.log(`募集確定処理開始: ${recruitmentId}`);
-
-  const recruitment = activeRecruitments.get(recruitmentId);
-  if (!recruitment) {
-    console.error(`募集データが見つかりません: ${recruitmentId}`);
-    return await interaction.update({
-      content: 'エラー: 募集データが見つかりません。',
-      embeds: [],
-      components: []
-    });
-  }
-
-  recruitment.status = 'active';
-  
-  const formattedDate = new Date(recruitment.date).toLocaleDateString('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-
-  const embed = createRecruitmentEmbed(recruitment, formattedDate);
-
-  const joinRow = new ActionRowBuilder()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId(`join_recruitment_${recruitmentId}`)
-        .setLabel('参加申込')
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(`cancel_participation_${recruitmentId}`)
-        .setLabel('参加キャンセル')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`close_recruitment_${recruitmentId}`)
-        .setLabel('募集締め切り')
-        .setStyle(ButtonStyle.Danger)
-    );
-
-  await interaction.update({
-    content: '募集を作成しました！',
-    embeds: [embed],
-    components: [joinRow]
-  });
-
-  // メッセージIDを保存
-  recruitment.messageId = interaction.message.id;
-  
-  // デバッグログ
-  console.log(`募集確定完了: ID=${recruitmentId}, メッセージID=${recruitment.messageId}`);
-  
-  // 更新された募集データを保存
-  activeRecruitments.set(recruitmentId, recruitment);
-}
 
 // 募集用エンベッド作成ヘルパー関数
 function createRecruitmentEmbed(recruitment, formattedDate) {
