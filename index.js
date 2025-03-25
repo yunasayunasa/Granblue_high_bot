@@ -390,9 +390,15 @@ async function handleButtonInteraction(interaction) {
     }
     // 参加確認ボタン
     else if (customId.startsWith('confirm_')) {
+      // テスト参加者確認ボタンとの区別
+  if (customId.startsWith('confirm_test_participants_')) {
+    // ここでは何もしない - 上の条件ですでに処理済み
+  } else {
+    // 通常の参加確認処理
       const recruitmentId = customId.replace('confirm_', '');
       await processConfirmation(interaction, recruitmentId);
     }
+  }
     // テストボタン
     else if (customId === 'simple_test') {
       await interaction.reply({
@@ -409,8 +415,12 @@ else if (customId.startsWith('add_test_participants_')) {
 // テスト参加者確定ボタン
 else if (customId.startsWith('confirm_test_participants_')) {
   const parts = customId.split('_');
-  const recruitmentId = parts[3];
-  const count = parseInt(parts[4], 10);
+  // 修正版
+  const idAndCount = customId.replace('confirm_test_participants_', '');
+  const [recruitmentId, countStr] = idAndCount.split('_');
+  const count = parseInt(countStr, 10);
+  
+  console.log(`テスト参加者追加処理: ID=${recruitmentId}, 人数=${count}`);
   await confirmAddTestParticipants(interaction, recruitmentId, count);
 }
 
