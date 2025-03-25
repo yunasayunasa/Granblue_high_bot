@@ -54,7 +54,7 @@ for (let i = 0; i < 24; i++) {
   });
 }
 
-// ユーティリティ関数
+// ユーティリティ関数 - この位置に正しく配置
 function generateUniqueId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
@@ -65,18 +65,7 @@ function debugLog(tag, message, data = null) {
   if (data) console.log(JSON.stringify(data, null, 2));
 }
 
-client.once('ready', () => {
-  console.log(`${client.user.tag} でログインしました！`);
-  console.log('Discord.js バージョン:', require('discord.js').version);
-  
-  // 保存済みデータがあればロード
-  const loadedData = loadRecruitmentData();
-  if (loadedData.size > 0) {
-    // グローバル変数を上書き
-    activeRecruitments = loadedData;
-  }
-  
- // 募集データのロード処理
+// 募集データのロード処理 - client.onceの外に正しく配置
 function loadRecruitmentData() {
   try {
     // fsモジュールを関数内でrequire
@@ -113,7 +102,7 @@ function loadRecruitmentData() {
   }
 }
 
-// 古い募集のクリーンアップ処理
+// 古い募集のクリーンアップ処理 - client.onceの外に正しく配置
 function cleanupOldRecruitments() {
   const now = new Date();
   let cleanupCount = 0;
@@ -139,17 +128,27 @@ function cleanupOldRecruitments() {
   
   // クリーンアップ後にデータを保存
   saveRecruitmentData();
-} 
+}
+
+client.once('ready', () => {
+  console.log(`${client.user.tag} でログインしました！`);
+  console.log('Discord.js バージョン:', require('discord.js').version);
+  
+  // 保存済みデータがあればロード
+  const loadedData = loadRecruitmentData();
+  if (loadedData.size > 0) {
+    // グローバル変数を上書き
+    activeRecruitments = loadedData;
+  }
   
   // 定期的な処理の開始
-  setInterval(saveRecruitmentData, 10 * 60 * 1000); // 5分ごとにデータ保存
-  setInterval(checkAutomaticClosing, 5 * 60 * 1000); // 1分ごとに自動締め切りチェック
+  setInterval(saveRecruitmentData, 2 * 60 * 1000);     // 2分ごとにデータ保存
+  setInterval(checkAutomaticClosing, 5 * 60 * 1000);   // 5分ごとに自動締め切りチェック
   setInterval(cleanupOldRecruitments, 24 * 60 * 60 * 1000); // 24時間ごとに古い募集をクリーンアップ
   
-  // 初回のクリーンアップを実行（起動時に一度実行）
+  // 初回のクリーンアップを実行
   cleanupOldRecruitments();
 });
-
 
 
 // 募集データの保存処理
