@@ -39,7 +39,7 @@ const client = new Client({
 const DATA_FILE_PATH = path.join(__dirname, 'recruitment_data.json');
 
 // グローバル変数
-const activeRecruitments = new Map(); // 現在進行中の募集を保持
+let activeRecruitments = new Map(); // 現在進行中の募集を保持
 const tempUserData = new Map(); // 一時的なユーザーデータ保存用
 const attributes = ['火', '水', '土', '風', '光', '闇']; // グラブルの属性
 const raidTypes = ['天元', 'ルシゼロ', '参加者希望']; // レイドタイプ
