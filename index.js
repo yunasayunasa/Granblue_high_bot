@@ -414,14 +414,26 @@ else if (customId.startsWith('add_test_participants_')) {
 
 // テスト参加者確定ボタン
 else if (customId.startsWith('confirm_test_participants_')) {
-  const parts = customId.split('_');
-  // 修正版
-  const idAndCount = customId.replace('confirm_test_participants_', '');
-  const [recruitmentId, countStr] = idAndCount.split('_');
-  const count = parseInt(countStr, 10);
-  
-  console.log(`テスト参加者追加処理: ID=${recruitmentId}, 人数=${count}`);
-  await confirmAddTestParticipants(interaction, recruitmentId, count);
+  try {
+    const parts = customId.split('_');
+    // 正しいインデックスを使う
+    // parts = ["confirm", "test", "participants", "1742922570965-l5exczb", "10"]
+    const recruitmentId = parts[3];
+    const count = parseInt(parts[4], 10);
+    
+    console.log(`テスト参加者追加処理を開始します: ID=${recruitmentId}, 人数=${count}`);
+    
+    // 関数が存在することを確認
+    if (typeof confirmAddTestParticipants !== 'function') {
+      console.error('confirmAddTestParticipants 関数が見つかりません');
+      return await interaction.update({ content: '内部エラーが発生しました' });
+    }
+    
+    await confirmAddTestParticipants(interaction, recruitmentId, count);
+  } catch (error) {
+    console.error('テスト参加者確定処理エラー:', error);
+    await interaction.update({ content: 'エラーが発生しました: ' + error.message });
+  }
 }
 
 // テスト参加者キャンセルボタン
