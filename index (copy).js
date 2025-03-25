@@ -641,7 +641,7 @@ function createRecruitmentEmbed(recruitment, formattedDate) {
         return { name: `【${attr}】`, value: '未定', inline: true };
       })
     )
-    .setFooter({ text: `募集ID: ${recruitment.id} | 開催日の朝8時に自動締め切り` });
+    .setFooter({ text: `募集ID: ${recruitment.id} | 開催日の夕方5時に自動締め切り` });
   
   return embed;
 }
@@ -1137,7 +1137,7 @@ async function updateRecruitmentMessage(recruitment) {
     });
 
     embed.addFields(fields);
-    embed.setFooter({ text: `募集ID: ${recruitment.id} | ${recruitment.status === 'active' ? '開催日の朝8時に自動締め切り' : '募集終了'}` });
+    embed.setFooter({ text: `募集ID: ${recruitment.id} | ${recruitment.status === 'active' ? '開催日の夕方5時に自動締め切り' : '募集終了'}` });
 
     // ボタン行を作成（募集中の場合のみ有効）
     const joinRow = new ActionRowBuilder()
@@ -1251,7 +1251,108 @@ async function autoAssignAttributes(recruitment) {
   });
   console.log(`割り振り対象参加者数: ${eligibleParticipants.length}名`);
 
-  // 属性の割り振り処理
+  // 属性の割り振り処理 (改善版)
+  const assignments = {};
+  const attributeCounts = {};
+  
+  // 各属性の希望者数をカウント
+  attributes.forEach(attr => {
+    attributeCounts[attr] = 0;
+  });
+  
+  // 各属性の希望者をカウント
+  eligibleParticipants.forEach(p => {
+    p.attributes.forEach(attr => {
+      attributeCounts[attr]++;
+    });
+  });
+  
+  console.log('各属性の希望者数:', attributeCounts);
+  
+  // 各参加者の属性選択と、各属性の人気度を掛け合わせてスコア計算
+  eligibleParticipants.forEach(p => {
+    // 各属性のスコアを計算（希望者が少ない属性ほど高スコア）
+    p.attributeScores = {};
+    p.attributes.forEach(attr => {
+      // 希望者が少ないほど高スコア = 1/希望者数
+      // 例: 希望者1人→スコア1.0、希望者2人→スコア0.5
+      p.attributeScores[attr] = 1 / attributeCounts[attr];
+    });
+    
+    // 参加者の優先スコア = 選択属性の少なさ + 属性の希少性
+    p.priorityScore = (10 / p.attributes.length) + Math.max(...Object.values(p.attributeScores));
+  });
+  
+  // 参加者を優先スコア降順でソート (スコアが高い人から割り当て)
+  eligibleParticipants.sort((a, b) => b.priorityScore - a.priorityScore);
+  
+  // 各参加者用のデバッグ情報
+  eligibleParticipants.forEach((p, index) => {
+    console.log(`参加者${index + 1}: ${p.username}, 希望属性: [${p.attributes.join(', ')}], 優先スコア: ${p.priorityScore.toFixed(2)}`);
+  });
+  
+  // 各参加者について処理
+  for (const participant of eligibleParticipants) {
+    // この参加者が選択した属性で、まだ割り当てられていないものを探す
+    const availableAttributes = participant.attributes.filter(attr => !assignments[attr]);
+    
+    if (availableAttributes.length > 0) {
+      // 利用可能な属性でスコアが最も高い（希望者が少ない）ものを選択
+      availableAttributes.sort((a, b) => {
+        return participant.attributeScores[b] - participant.attributeScores[a];
+      });
+      
+      const chosenAttribute = availableAttributes[0];
+      assignments[chosenAttribute] = participant;
+      participant.assignedAttribute = chosenAttribute;
+      console.log(`${participant.username}を${chosenAttribute}属性に割り当てました (希望者${attributeCounts[chosenAttribute]}人中)`);
+    } else {
+      console.log(`${participant.username}に割り当て可能な属性がありません`);
+    }
+  }
+
+  // 埋まっていない属性を、まだ割り当てられていない参加者で埋める
+  const unassignedParticipants = eligibleParticipants.filter(p => !p.assignedAttribute);
+  const emptyAttributes = attributes.filter(attr => !assignments[attr]);
+  
+  console.log(`未割り当て参加者: ${unassignedParticipants.length}名`);
+  console.log(`空の属性: [${emptyAttributes.join(', ')}]`);
+
+  // 未割り当て参加者を、そのユーザーの希望属性との重複が多い順に並べる
+  for (let i = 0; i < Math.min(unassignedParticipants.length, emptyAttributes.length); i++) {
+    // 最も適切な未割り当て参加者を探す
+    let bestParticipantIndex = 0;
+    let highestMatchScore = -1;
+    
+    for (let j = 0; j < unassignedParticipants.length; j++) {
+      const participant = unassignedParticipants[j];
+      const matchScore = emptyAttributes.filter(attr => participant.attributes.includes(attr)).length;
+      
+      if (matchScore > highestMatchScore) {
+        highestMatchScore = matchScore;
+        bestParticipantIndex = j;
+      }
+    }
+    
+    const participant = unassignedParticipants[bestParticipantIndex];
+    
+    // 参加者の希望と一致する空属性があれば、それを優先
+    const matchingAttrs = emptyAttributes.filter(attr => participant.attributes.includes(attr));
+    const attr = matchingAttrs.length > 0 ? matchingAttrs[0] : emptyAttributes[0];
+    
+    // 割り当て実行
+    assignments[attr] = participant;
+    participant.assignedAttribute = attr;
+    
+    // 処理済みの項目をリストから削除
+    unassignedParticipants.splice(bestParticipantIndex, 1);
+    emptyAttributes.splice(emptyAttributes.indexOf(attr), 1);
+    
+    console.log(`未割り当て参加者 ${participant.username} を ${attr} に割り当てました (希望${matchingAttrs.length > 0 ? '一致' : '外'})`);
+  }
+
+  
+  /*// 属性の割り振り処理
   const assignments = {};
   
   // 参加者を属性選択数で並べ替え (選択属性が少ない人を優先)
@@ -1294,7 +1395,7 @@ async function autoAssignAttributes(recruitment) {
     assignments[attr] = participant;
     participant.assignedAttribute = attr;
     console.log(`未割り当て参加者 ${participant.username} を ${attr} に割り当てました`);
-  }
+  }*/
 
   // 割り当て結果を元の参加者リストに反映
   for (const participant of recruitment.participants) {
