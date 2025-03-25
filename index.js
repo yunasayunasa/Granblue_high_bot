@@ -278,6 +278,71 @@ else if (message.content.startsWith('!テスト参加者追加 ')) {
     await message.reply('使用方法: `!テスト参加者追加 [募集ID] [人数]`');
   }
 }
+// client.on('messageCreate')のハンドラに追加
+else if (message.content === '!IDリスト') {
+  try {
+    const ids = Array.from(activeRecruitments.keys());
+    if (ids.length === 0) {
+      return message.reply('現在募集データはありません。');
+    }
+    
+    let response = '**募集ID一覧**\n\n';
+    ids.forEach((id, index) => {
+      const recruitment = activeRecruitments.get(id);
+      response += `${index + 1}. \`${id}\` (${recruitment.type})\n`;
+    });
+    
+    await message.reply(response);
+  } catch (error) {
+    console.error('IDリスト表示エラー:', error);
+    await message.reply(`エラーが発生しました: ${error.message}`);
+  }
+}
+// client.on('messageCreate')のハンドラに追加
+else if (message.content.startsWith('!追加 ')) {
+  try {
+    // 入力からIDを取得
+    const id = message.content.replace('!追加 ', '').trim();
+    console.log(`追加コマンド実行: ID=${id}`);
+    
+    // 募集データの取得
+    const recruitment = activeRecruitments.get(id);
+    if (!recruitment) {
+      return message.reply(`ID "${id}" の募集は存在しません。`);
+    }
+    
+    // 3人のテスト参加者を追加
+    for (let i = 0; i < 3; i++) {
+      const participant = {
+        userId: `test-${i}-${Date.now()}`,
+        username: `[TEST] 参加者${i+1}`,
+        joinType: recruitment.type,
+        attributes: ['火', '水', '土'],
+        timeAvailability: '今すぐ',
+        assignedAttribute: null,
+        isTestParticipant: true
+      };
+      
+      recruitment.participants.push(participant);
+    }
+    
+    // メッセージ更新
+    await updateRecruitmentMessage(recruitment);
+    
+    // 確認メッセージ
+    await message.reply(`ID "${id}" の募集に3名のテスト参加者を追加しました。\n現在の参加者数: ${recruitment.participants.length}名`);
+    
+    // 7人以上なら自動割り振り
+    if (recruitment.participants.length >= 7 && recruitment.status === 'active') {
+      await message.channel.send('参加者が7人以上になったため、自動割り振りを実行します...');
+      await autoAssignAttributes(recruitment);
+      await updateRecruitmentMessage(recruitment);
+    }
+  } catch (error) {
+    console.error('テスト参加者追加エラー:', error);
+    await message.reply(`エラーが発生しました: ${error.message}`);
+  }
+}
   // !募集削除コマンドで募集を削除
   else if (message.content.startsWith('!募集削除 ')) {
     const recruitmentId = message.content.replace('!募集削除 ', '');
