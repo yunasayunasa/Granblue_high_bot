@@ -251,19 +251,26 @@ client.on('messageCreate', async message => {
   else if (message.content === '!募集詳細確認') {
     await showAllRecruitmentDetails(message);
   }
-  // メッセージハンドラに以下のコードを追加
-else if (message.content === '!再起動テスト' && (message.author.id === '管理者のID' || message.member.permissions.has('ADMINISTRATOR'))) {
-  await message.reply('テスト用の再起動を行います。データが正しく保存・復元されるか確認してください...');
-  
-  // データを保存
-  saveRecruitmentData();
-  
-  // 少し待ってからプロセスを終了
-  setTimeout(() => {
-    console.log('テスト用再起動を実行します');
-    process.exit(0);  // クリーンな終了（Renderが自動的に再起動）
-  }, 3000);
-}
+  // 再起動テストコマンド
+  else if (message.content === '!再起動テスト') {
+    // 管理者権限を持つユーザーのみ実行可能
+    if (message.member.permissions.has('Administrator')) {
+      await message.reply('テスト用の再起動を行います。データが正しく保存・復元されるか確認してください...');
+      
+      // データを保存
+      saveRecruitmentData();
+      
+      console.log(`${message.author.tag}がテスト用再起動をリクエストしました`);
+      
+      // 少し待ってからプロセスを終了
+      setTimeout(() => {
+        console.log('テスト用再起動を実行します');
+        process.exit(0);  // クリーンな終了（Renderが自動的に再起動）
+      }, 3000);
+    } else {
+      await message.reply('このコマンドは管理者権限を持つユーザーのみが使用できます。');
+    }
+  }
   
   // Discord.js v14テストコマンド
   else if (message.content === '!v14test') {
