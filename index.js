@@ -1255,7 +1255,7 @@ async function updateRecruitmentMessage(recruitment) {
     console.error('募集メッセージ更新エラー:', error);
   }
 }
-// 属性自動割り振り処理
+// 属性自動割り振り処理 - 全参加者を対象に修正
 async function autoAssignAttributes(recruitment) {
   console.log(`属性自動割り振り処理: ${recruitment.id}, 参加者数=${recruitment.participants.length}`);
   
@@ -1285,6 +1285,9 @@ async function autoAssignAttributes(recruitment) {
   let bestTimeSlot = timeSlots[0] || 'デフォルト';
   let maxParticipants = 0;
 
+  // レイドタイプに適合するすべての参加者を収集
+  let allEligibleParticipants = [];
+
   timeSlots.forEach(timeSlot => {
     // 参加タイプによるフィルタリング
     const filteredParticipants = participantsByTime[timeSlot].filter(p => {
@@ -1300,6 +1303,10 @@ async function autoAssignAttributes(recruitment) {
     
     console.log(`時間枠 ${timeSlot}: ${filteredParticipants.length}名が参加可能`);
 
+    // すべての対象参加者を集める (重要な変更点)
+    allEligibleParticipants = allEligibleParticipants.concat(filteredParticipants);
+
+    // 最多参加者の時間枠を記録 (開催時間決定用)
     if (filteredParticipants.length > maxParticipants) {
       maxParticipants = filteredParticipants.length;
       bestTimeSlot = timeSlot;
@@ -1307,16 +1314,16 @@ async function autoAssignAttributes(recruitment) {
   });
   
   console.log(`最適な時間枠: ${bestTimeSlot} (参加者数: ${maxParticipants}名)`);
+  console.log(`合計の対象参加者数: ${allEligibleParticipants.length}名 (全時間帯合計)`);
   
   // 一番参加者が多い時間帯のレイドタイプを決定（参加者希望の場合のみ）
   let raidTypeToAssign = recruitment.type;
   if (recruitment.type === '参加者希望') {
-    const participantsInBestTimeSlot = participantsByTime[bestTimeSlot];
-
+    // レイドタイプのカウント
     let tengenCount = 0;
     let luciZeroCount = 0;
 
-    participantsInBestTimeSlot.forEach(p => {
+    allEligibleParticipants.forEach(p => {
       if (p.joinType === '天元') tengenCount++;
       else if (p.joinType === 'ルシゼロ') luciZeroCount++;
     });
@@ -1325,15 +1332,16 @@ async function autoAssignAttributes(recruitment) {
     console.log(`決定したレイドタイプ: ${raidTypeToAssign} (天元=${tengenCount}名, ルシゼロ=${luciZeroCount}名)`);
   }
 
-  // 選択された時間帯とレイドタイプに基づいて参加者をフィルタリング
-  const eligibleParticipants = participantsByTime[bestTimeSlot].filter(p => {
+  // 最終的なレイドタイプに基づいて参加者をフィルタリング
+  const eligibleParticipants = allEligibleParticipants.filter(p => {
     if (raidTypeToAssign === '天元') {
       return p.joinType === '天元' || p.joinType === 'なんでも可';
     } else {
       return p.joinType === 'ルシゼロ' || p.joinType === 'なんでも可';
     }
   });
-  console.log(`割り振り対象参加者数: ${eligibleParticipants.length}名`);
+  
+  console.log(`割り振り対象参加者数: ${eligibleParticipants.length}名 (全時間帯から適合者)`);
 
   // 属性の割り振り処理 (改善版)
   const assignments = {};
@@ -1372,7 +1380,7 @@ async function autoAssignAttributes(recruitment) {
   
   // 各参加者用のデバッグ情報
   eligibleParticipants.forEach((p, index) => {
-    console.log(`参加者${index + 1}: ${p.username}, 希望属性: [${p.attributes.join(', ')}], 優先スコア: ${p.priorityScore.toFixed(2)}`);
+    console.log(`参加者${index + 1}: ${p.username}, 希望属性: [${p.attributes.join(', ')}], 優先スコア: ${p.priorityScore.toFixed(2)}, 時間枠: ${p.timeAvailability}`);
   });
   
   // 各参加者について処理
@@ -1435,58 +1443,12 @@ async function autoAssignAttributes(recruitment) {
     console.log(`未割り当て参加者 ${participant.username} を ${attr} に割り当てました (希望${matchingAttrs.length > 0 ? '一致' : '外'})`);
   }
 
-  
-  /*// 属性の割り振り処理
-  const assignments = {};
-  
-  // 参加者を属性選択数で並べ替え (選択属性が少ない人を優先)
-  eligibleParticipants.sort((a, b) => a.attributes.length - b.attributes.length);
-  
-  // 各参加者用のデバッグ情報
-  eligibleParticipants.forEach((p, index) => {
-    console.log(`参加者${index + 1}: ${p.username}, 希望属性: [${p.attributes.join(', ')}], 属性数: ${p.attributes.length}`);
-  });
-  
-  // 各参加者について、選択した属性のうち最も希望者が少ない属性に割り当て
-  for (const participant of eligibleParticipants) {
-    // この参加者が選択した属性で、まだ割り当てられていないものを探す
-    const availableAttributes = participant.attributes.filter(attr => !assignments[attr]);
-    console.log(`${participant.username}の利用可能な属性: [${availableAttributes.join(', ')}]`);
-    
-    if (availableAttributes.length > 0) {
-      // 利用可能な属性から一つ選択
-      const chosenAttribute = availableAttributes[0];
-      assignments[chosenAttribute] = participant;
-      participant.assignedAttribute = chosenAttribute;
-      console.log(`${participant.username}を${chosenAttribute}属性に割り当てました`);
-    } else {
-      console.log(`${participant.username}に割り当て可能な属性がありません`);
-    }
-  }
-
-  // 埋まっていない属性を、まだ割り当てられていない参加者で埋める
-  const unassignedParticipants = eligibleParticipants.filter(p => !p.assignedAttribute);
-  const emptyAttributes = attributes.filter(attr => !assignments[attr]);
-  
-  console.log(`未割り当て参加者: ${unassignedParticipants.length}名`);
-  console.log(`空の属性: [${emptyAttributes.join(', ')}]`);
-
-  for (let i = 0; i < Math.min(unassignedParticipants.length, emptyAttributes.length); i++) {
-    const participant = unassignedParticipants[i];
-    const attr = emptyAttributes[i];
-
-    // 参加者の希望属性に含まれていない場合でも割り当て
-    assignments[attr] = participant;
-    participant.assignedAttribute = attr;
-    console.log(`未割り当て参加者 ${participant.username} を ${attr} に割り当てました`);
-  }*/
-
   // 割り当て結果を元の参加者リストに反映
   for (const participant of recruitment.participants) {
     const assignedParticipant = eligibleParticipants.find(p => p.userId === participant.userId);
     if (assignedParticipant && assignedParticipant.assignedAttribute) {
       participant.assignedAttribute = assignedParticipant.assignedAttribute;
-      console.log(`元のリストで ${participant.username} を ${participant.assignedAttribute} に設定しました`);
+      console.log(`元のリストで ${participant.username} を ${participant.assignedAttribute} に設定しました (時間枠: ${participant.timeAvailability})`);
     } else {
       participant.assignedAttribute = null;
       console.log(`${participant.username} は割り当てられませんでした`);
@@ -1500,6 +1462,192 @@ async function autoAssignAttributes(recruitment) {
 
   return recruitment;
 }
+
+  
+  
+  
+  
+  
+
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+
+  
+
+  
+  
+  
+  
+
+  
+  
+
+  
+  
+  
+  
+
+  
+
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  
+
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  
+  
+
+  
+  
+
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+  
+  
+
+  
+  
+
+
 
 
 // 自動締め切りチェック処理も修正して明確にする
