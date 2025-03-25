@@ -54,7 +54,7 @@ for (let i = 0; i < 24; i++) {
   });
 }
 
-// ユーティリティ関数
+// ユーティリティ関数 - この位置に正しく配置
 function generateUniqueId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
@@ -65,23 +65,44 @@ function debugLog(tag, message, data = null) {
   if (data) console.log(JSON.stringify(data, null, 2));
 }
 
-// ボットの準備完了時に実行
-client.once('ready', () => {
-  console.log(`${client.user.tag} でログインしました！`);
-  console.log('Discord.js バージョン:', require('discord.js').version);
-  
-  
-  
-  // 定期的な処理の開始
-  setInterval(saveRecruitmentData, 10 * 60 * 1000); // 5分ごとにデータ保存
-  setInterval(checkAutomaticClosing, 5 * 60 * 1000); // 1分ごとに自動締め切りチェック
-  setInterval(cleanupOldRecruitments, 24 * 60 * 60 * 1000); // 24時間ごとに古い募集をクリーンアップ
-  
-  // 初回のクリーンアップを実行（起動時に一度実行）
-  cleanupOldRecruitments();
-});
+// 募集データのロード処理 - client.onceの外に正しく配置
+function loadRecruitmentData() {
+  try {
+    // fsモジュールを関数内でrequire
+    const fs = require('fs');
+    const path = require('path');
+    
+    // /tmp ディレクトリから読み込み
+    const dataFilePath = path.join('/tmp', 'recruitment_data.json');
+    
+    // ファイルが存在するか確認
+    if (fs.existsSync(dataFilePath)) {
+      console.log('保存されていた募集データをロードします...');
+      const data = fs.readFileSync(dataFilePath, 'utf8');
+      const parsedData = JSON.parse(data);
+      
+      // 読み込んだデータをMapに変換
+      const loadedRecruitments = new Map();
+      let activeCount = 0;
+      
+      Object.entries(parsedData).forEach(([id, recruitment]) => {
+        loadedRecruitments.set(id, recruitment);
+        if (recruitment.status === 'active') activeCount++;
+      });
+      
+      console.log(`${loadedRecruitments.size}件の募集データをロードしました（アクティブ: ${activeCount}件）`);
+      return loadedRecruitments;
+    } else {
+      console.log('保存された募集データはありません。新規に開始します。');
+      return new Map();
+    }
+  } catch (error) {
+    console.error('募集データのロード中にエラーが発生しました:', error);
+    return new Map(); // エラー時は空のMapを返す
+  }
+}
 
-// 古い募集のクリーンアップ処理
+// 古い募集のクリーンアップ処理 - client.onceの外に正しく配置
 function cleanupOldRecruitments() {
   const now = new Date();
   let cleanupCount = 0;
@@ -104,12 +125,54 @@ function cleanupOldRecruitments() {
   });
   
   console.log(`古い募集 ${cleanupCount}件をクリーンアップしました。残り: ${activeRecruitments.size}件`);
+  
+  // クリーンアップ後にデータを保存
+  saveRecruitmentData();
 }
+
+client.once('ready', () => {
+  console.log(`${client.user.tag} でログインしました！`);
+  console.log('Discord.js バージョン:', require('discord.js').version);
+  
+  // 保存済みデータがあればロード
+  const loadedData = loadRecruitmentData();
+  if (loadedData.size > 0) {
+    // グローバル変数を上書き
+    activeRecruitments = loadedData;
+  }
+  
+  // 定期的な処理の開始
+  setInterval(saveRecruitmentData, 2 * 60 * 1000);     // 2分ごとにデータ保存
+  setInterval(checkAutomaticClosing, 5 * 60 * 1000);   // 5分ごとに自動締め切りチェック
+  setInterval(cleanupOldRecruitments, 24 * 60 * 60 * 1000); // 24時間ごとに古い募集をクリーンアップ
+  
+  // 初回のクリーンアップを実行
+  cleanupOldRecruitments();
+});
+
 
 // 募集データの保存処理
 function saveRecruitmentData() {
-  console.log(`${activeRecruitments.size}件の募集データを保存しました`);
-  // 本番環境ではここにデータ保存のロジックを実装
+  try {
+    // fsモジュールを関数内でrequire
+    const fs = require('fs');
+    const path = require('path');
+    
+    // 書き込み可能な /tmp ディレクトリを使用 (Renderの環境でも書き込み可能)
+    const dataFilePath = path.join('/tmp', 'recruitment_data.json');
+    
+    // MapをJSONに変換可能なオブジェクトに変換
+    const dataToSave = {};
+    activeRecruitments.forEach((recruitment, id) => {
+      dataToSave[id] = recruitment;
+    });
+    
+    // ファイルに保存
+    fs.writeFileSync(dataFilePath, JSON.stringify(dataToSave, null, 2), 'utf8');
+    console.log(`${activeRecruitments.size}件の募集データを保存しました`);
+  } catch (error) {
+    console.error('募集データの保存中にエラーが発生しました:', error);
+  }
 }
 
 // エラー応答ヘルパー関数
@@ -1664,11 +1727,56 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// シンプルなヘルスチェックエンドポイント
-app.get('/', (req, res) => {
-  res.send('Bot is running!');
+app.use((err, req, res, next) => {
+  console.error('Expressサーバーエラー:', err);
+  res.status(500).send('サーバーエラーが発生しました');
 });
 
+// 未処理の例外をキャッチ
+process.on('uncaughtException', (err) => {
+  console.error('未処理の例外:', err);
+  // エラー発生時にデータを保存
+  saveRecruitmentData();
+  // 深刻なエラーの場合は安全に再起動
+  setTimeout(() => {
+    console.log('安全なシャットダウンを実行します...');
+    process.exit(1);  // 終了コード1でプロセス終了（サーバーは自動的に再起動）
+  }, 1000);
+});
+
+// プロセスシグナルをハンドリング
+process.on('SIGTERM', () => {
+  console.log('SIGTERMを受信しました。グレースフルシャットダウンを開始します...');
+  // 終了前にデータを保存
+  saveRecruitmentData();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINTを受信しました。グレースフルシャットダウンを開始します...');
+  // 終了前にデータを保存
+  saveRecruitmentData();
+  process.exit(0);
+});
+
+// 定期的なヘルスチェックを追加
+// 10分ごとに自己ヘルスチェックを実施
+setInterval(() => {
+  try {
+    // 自己ヘルスチェック - メモリ使用量など
+    const memoryUsage = process.memoryUsage();
+    console.log(`ヘルスチェック: メモリ使用量 ${Math.round(memoryUsage.rss / 1024 / 1024)}MB`);
+    
+    // もしメモリ使用量が基準値を超えた場合は保存して再起動
+    if (memoryUsage.rss > 450 * 1024 * 1024) { // 450MBを超えたら
+      console.log('メモリ使用量が高いため、データを保存して再起動します...');
+      saveRecruitmentData();
+      setTimeout(() => process.exit(1), 1000);
+    }
+  } catch (error) {
+    console.error('ヘルスチェックエラー:', error);
+  }
+}, 10 * 60 * 1000); // 10分ごと
 // サーバーを起動
 app.listen(PORT, () => {
   console.log(`監視用サーバーが起動しました: ポート ${PORT}`);
