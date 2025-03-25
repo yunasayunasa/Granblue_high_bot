@@ -1748,6 +1748,38 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// ルートパス
+app.get('/', (req, res) => {
+  res.status(200).send('Bot is running!');
+});
+
+// 健康状態チェック用エンドポイント
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'up',
+    message: 'Bot is operational',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    activeRecruitments: activeRecruitments.size
+  });
+});
+
+// ping用シンプルエンドポイント (UptimeRobot推奨)
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
+// 他のルートへのアクセスをキャッチするフォールバック
+app.get('*', (req, res) => {
+  res.status(200).send('Bot is running! (Unknown route)');
+});
+
+// エラーハンドリング
+app.use((err, req, res, next) => {
+  console.error('Expressサーバーエラー:', err);
+  res.status(500).send('サーバーエラーが発生しました');
+});
+
 app.use((err, req, res, next) => {
   console.error('Expressサーバーエラー:', err);
   res.status(500).send('サーバーエラーが発生しました');
