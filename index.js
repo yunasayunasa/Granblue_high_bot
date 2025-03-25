@@ -24,6 +24,12 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error(reason);
 });
 
+// ここに追加：テストモード用のグローバル変数
+const testMode = {
+  active: false,
+  testParticipants: [] // テスト用参加者データを保存
+};
+
 // ボットの基本設定
 const client = new Client({
   intents: [
@@ -233,6 +239,26 @@ client.on('messageCreate', async message => {
   else if (message.content === '!募集リスト') {
     await showActiveRecruitments(message);
   }
+  // ここに追加：テストモード関連コマンド
+  // !テストモード開始コマンド
+  else if (message.content === '!テストモード開始') {
+    await startTestMode(message);
+  }
+  // !テストモード終了コマンド
+  else if (message.content === '!テストモード終了') {
+    await endTestMode(message);
+  }
+  // !テスト参加者追加コマンド
+  else if (message.content.startsWith('!テスト参加者追加 ')) {
+    const params = message.content.replace('!テスト参加者追加 ', '').split(' ');
+    if (params.length >= 2) {
+      const recruitmentId = params[0];
+      const count = parseInt(params[1], 10);
+      await addTestParticipants(message, recruitmentId, count);
+    } else {
+      await message.reply('使用方法: `!テスト参加者追加 [募集ID] [人数]`');
+    }
+  }
   // !募集ヘルプコマンドでヘルプを表示
   else if (message.content === '!募集ヘルプ') {
     await showHelp(message);
@@ -271,6 +297,8 @@ client.on('messageCreate', async message => {
       await message.reply('このコマンドは管理者権限を持つユーザーのみが使用できます。');
     }
   }
+  
+  
   
   // Discord.js v14テストコマンド
   else if (message.content === '!v14test') {
@@ -376,6 +404,31 @@ async function handleButtonInteraction(interaction) {
         ephemeral: true
       });
     }
+    
+    // ここに追加：テスト関連ボタン
+    // テスト参加者追加ボタン
+    else if (customId.startsWith('add_test_participants_')) {
+      const recruitmentId = customId.replace('add_test_participants_', '');
+      await showTestParticipantAddOptions(interaction, recruitmentId);
+    }
+    
+    // テスト参加者確定ボタン
+    else if (customId.startsWith('confirm_test_participants_')) {
+      const parts = customId.split('_');
+      const recruitmentId = parts[3];
+      const count = parseInt(parts[4], 10);
+      await confirmAddTestParticipants(interaction, recruitmentId, count);
+    }
+    
+    // テスト参加者キャンセルボタン
+    else if (customId === 'cancel_test_participants') {
+      await interaction.update({
+        content: 'テスト参加者の追加をキャンセルしました。',
+        embeds: [],
+        components: []
+      });
+    }
+    
     // その他の未処理ボタン
     else {
       console.log(`未処理のボタンID: ${customId}`);
@@ -410,6 +463,12 @@ async function handleSelectMenuInteraction(interaction) {
       const selectedType = interaction.values[0];
       await showAttributeSelection(interaction, recruitmentId, selectedType);
     }
+    // テスト参加者数選択メニュー
+    else if (customId.startsWith('test_participant_count_')) {
+      const recruitmentId = customId.replace('test_participant_count_', '');
+      const count = parseInt(interaction.values[0], 10);
+      await showTestParticipantConfirmation(interaction, recruitmentId, count);
+    }
     // 属性選択
     else if (customId.startsWith('attribute_select_')) {
       const parts = customId.split('_');
@@ -434,6 +493,9 @@ async function handleSelectMenuInteraction(interaction) {
         selectedAttributes,
         selectedTime
       );
+      
+      
+      
     }
     // その他のセレクトメニュー
     else {
@@ -1242,14 +1304,25 @@ async function updateRecruitmentMessage(recruitment) {
           .setStyle(ButtonStyle.Danger)
           .setDisabled(recruitment.status !== 'active')
       );
+      // テストモードがアクティブな場合のみテスト参加者追加ボタンを表示
+    let components = [joinRow];
+    if (testMode.active && recruitment.status === 'active') {
+      const testRow = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`add_test_participants_${recruitment.id}`)
+            .setLabel('🧪 テスト参加者追加')
+            .setStyle(ButtonStyle.Secondary)
+        );
+      components.push(testRow);
+    }
 
     // メッセージを更新
     await message.edit({
       content: recruitment.status === 'active' ? '**【募集中】**' : '**【募集終了】**',
       embeds: [embed],
-      components: [joinRow]
+      components: components  // ここを変更（joinRowだけでなく全てのコンポーネントを渡す）
     });
-    
     console.log(`募集メッセージ更新完了: ${recruitment.id}`);
   } catch (error) {
     console.error('募集メッセージ更新エラー:', error);
@@ -1978,6 +2051,18 @@ setInterval(() => {
     console.error('ヘルスチェックエラー:', error);
   }
 }, 10 * 60 * 1000); // 10分ごと
+// テストモードがアクティブな場合のみテスト参加者追加ボタンを表示
+let components = [joinRow];
+if (testMode.active && recruitment.status === 'active') {
+  const testRow = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`add_test_participants_${recruitment.id}`)
+        .setLabel('🧪 テスト参加者追加')
+        .setStyle(ButtonStyle.Secondary)
+    );
+  components.push(testRow);
+}
 // サーバーを起動
 app.listen(PORT, () => {
   console.log(`監視用サーバーが起動しました: ポート ${PORT}`);
