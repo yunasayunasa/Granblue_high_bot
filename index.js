@@ -244,7 +244,24 @@ client.on('messageCreate', async message => {
   }
   // !テストモード開始コマンド
 else if (message.content === '!テストモード開始') {
-  await startTestMode(message);
+  try {
+    testMode.active = true;
+    testMode.testParticipants = [];
+    
+    const embed = new EmbedBuilder()
+      .setTitle('🧪 テストモード開始')
+      .setDescription('テストモードが開始されました。以下の機能が利用できます：\n\n' +
+        '`!テスト参加者追加 [募集ID] [人数]` - 指定した募集に指定した人数のテスト参加者を追加\n' +
+        '`!直接テスト [募集ID] [人数]` - シンプルなテスト参加者追加コマンド\n' +
+        '`!テストモード終了` - テストモードを終了する')
+      .setColor('#FF9800');
+
+    await message.reply({ embeds: [embed] });
+    console.log(`テストモードが ${message.author.tag} によって開始されました`);
+  } catch (error) {
+    console.error('テストモード開始エラー:', error);
+    await message.reply('エラーが発生しました: ' + error.message);
+  }
 }
 // !テストモード終了コマンド
 else if (message.content === '!テストモード終了') {
@@ -295,6 +312,49 @@ else if (message.content.startsWith('!テスト参加者追加 ')) {
       await message.reply('このコマンドは管理者権限を持つユーザーのみが使用できます。');
     }
   }
+  // client.on('messageCreate')のハンドラに追加
+else if (message.content.startsWith('!直接テスト ')) {
+  try {
+    const params = message.content.replace('!直接テスト ', '').split(' ');
+    const recruitmentId = params[0];
+    const count = params.length >= 2 ? parseInt(params[1], 10) : 5;
+    
+    const recruitment = activeRecruitments.get(recruitmentId);
+    if (!recruitment) {
+      return await message.reply('指定された募集IDは存在しません。');
+    }
+    
+    // テスト参加者を追加
+    let addedCount = 0;
+    for (let i = 0; i < count; i++) {
+      const testParticipant = {
+        userId: `test-${Date.now()}-${i}`,
+        username: `テスト参加者${i+1}`,
+        joinType: recruitment.type,
+        attributes: ['火', '水', '土', '風', '光', '闇'].slice(0, 3),
+        timeAvailability: '今すぐ',
+        assignedAttribute: null,
+        isTestParticipant: true
+      };
+      
+      recruitment.participants.push(testParticipant);
+      addedCount++;
+    }
+    
+    await updateRecruitmentMessage(recruitment);
+    await message.reply(`${addedCount}名のテスト参加者を追加しました`);
+    
+    // 参加者が7人以上になった場合、自動割り振りを行う
+    if (recruitment.participants.length >= 7 && recruitment.status === 'active') {
+      await message.reply('参加者が7人以上になったため、自動割り振りを実行します...');
+      await autoAssignAttributes(recruitment);
+      await updateRecruitmentMessage(recruitment);
+    }
+  } catch (error) {
+    console.error('直接テスト追加エラー:', error);
+    await message.reply('エラーが発生しました: ' + error.message);
+  }
+}
   
   // Discord.js v14テストコマンド
   else if (message.content === '!v14test') {
