@@ -24,12 +24,6 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error(reason);
 });
 
-// ここに追加：テストモード用のグローバル変数
-const testMode = {
-  active: false,
-  testParticipants: [] // テスト用参加者データを保存
-};
-
 // ボットの基本設定
 const client = new Client({
   intents: [
@@ -239,8 +233,6 @@ client.on('messageCreate', async message => {
   else if (message.content === '!募集リスト') {
     await showActiveRecruitments(message);
   }
-  
-  
   // !募集ヘルプコマンドでヘルプを表示
   else if (message.content === '!募集ヘルプ') {
     await showHelp(message);
@@ -279,8 +271,6 @@ client.on('messageCreate', async message => {
       await message.reply('このコマンドは管理者権限を持つユーザーのみが使用できます。');
     }
   }
-  
-  
   
   // Discord.js v14テストコマンド
   else if (message.content === '!v14test') {
@@ -386,31 +376,6 @@ async function handleButtonInteraction(interaction) {
         ephemeral: true
       });
     }
-    
-    // ここに追加：テスト関連ボタン
-    // テスト参加者追加ボタン
-    else if (customId.startsWith('add_test_participants_')) {
-      const recruitmentId = customId.replace('add_test_participants_', '');
-      await showTestParticipantAddOptions(interaction, recruitmentId);
-    }
-    
-    // テスト参加者確定ボタン
-    else if (customId.startsWith('confirm_test_participants_')) {
-      const parts = customId.split('_');
-      const recruitmentId = parts[3];
-      const count = parseInt(parts[4], 10);
-      await confirmAddTestParticipants(interaction, recruitmentId, count);
-    }
-    
-    // テスト参加者キャンセルボタン
-    else if (customId === 'cancel_test_participants') {
-      await interaction.update({
-        content: 'テスト参加者の追加をキャンセルしました。',
-        embeds: [],
-        components: []
-      });
-    }
-    
     // その他の未処理ボタン
     else {
       console.log(`未処理のボタンID: ${customId}`);
@@ -445,12 +410,6 @@ async function handleSelectMenuInteraction(interaction) {
       const selectedType = interaction.values[0];
       await showAttributeSelection(interaction, recruitmentId, selectedType);
     }
-    // テスト参加者数選択メニュー
-    else if (customId.startsWith('test_participant_count_')) {
-      const recruitmentId = customId.replace('test_participant_count_', '');
-      const count = parseInt(interaction.values[0], 10);
-      await showTestParticipantConfirmation(interaction, recruitmentId, count);
-    }
     // 属性選択
     else if (customId.startsWith('attribute_select_')) {
       const parts = customId.split('_');
@@ -475,9 +434,6 @@ async function handleSelectMenuInteraction(interaction) {
         selectedAttributes,
         selectedTime
       );
-      
-      
-      
     }
     // その他のセレクトメニュー
     else {
@@ -1291,8 +1247,9 @@ async function updateRecruitmentMessage(recruitment) {
     await message.edit({
       content: recruitment.status === 'active' ? '**【募集中】**' : '**【募集終了】**',
       embeds: [embed],
-      components: components  // ここを変更（joinRowだけでなく全てのコンポーネントを渡す）
+      components: [joinRow]
     });
+    
     console.log(`募集メッセージ更新完了: ${recruitment.id}`);
   } catch (error) {
     console.error('募集メッセージ更新エラー:', error);
@@ -1505,6 +1462,192 @@ async function autoAssignAttributes(recruitment) {
 
   return recruitment;
 }
+
+  
+  
+  
+  
+  
+
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+
+  
+
+  
+  
+  
+  
+
+  
+  
+
+  
+  
+  
+  
+
+  
+
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  
+
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+  
+  
+
+  
+  
+
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+
+  
+  
+
+  
+  
+  
+
+  
+  
+  
+  
+  
+
+  
+  
+
+
 
 
 // 自動締め切りチェック処理も修正して明確にする
@@ -1835,340 +1978,6 @@ setInterval(() => {
     console.error('ヘルスチェックエラー:', error);
   }
 }, 10 * 60 * 1000); // 10分ごと
-// テストモード開始処理
-async function startTestMode(message) {
-  // 管理者権限の確認
-  if (!message.member.permissions.has('Administrator')) {
-    return await message.reply('テストモードは管理者のみが開始できます。');
-  }
-
-  testMode.active = true;
-  testMode.testParticipants = [];
-
-  const embed = new EmbedBuilder()
-    .setTitle('🧪 テストモード開始')
-    .setDescription('テストモードが開始されました。以下の機能が利用できます：\n\n' +
-      '`!テスト参加者追加 [募集ID] [人数]` - 指定した募集に指定した人数のテスト参加者を追加\n' +
-      '`!テストモード終了` - テストモードを終了する')
-    .setColor('#FF9800');
-
-  await message.reply({ embeds: [embed] });
-
-  console.log(`テストモードが ${message.author.tag} によって開始されました`);
-}
-
-// テストモード終了処理
-async function endTestMode(message) {
-  if (!testMode.active) {
-    return await message.reply('テストモードは現在開始されていません。');
-  }
-
-  testMode.active = false;
-  const testParticipantCount = testMode.testParticipants.length;
-  testMode.testParticipants = [];
-
-  const embed = new EmbedBuilder()
-    .setTitle('🧪 テストモード終了')
-    .setDescription(`テストモードが終了しました。\n追加されたテスト参加者 ${testParticipantCount} 名は削除されました。`)
-    .setColor('#4CAF50');
-
-  await message.reply({ embeds: [embed] });
-
-  // 関連する募集メッセージを更新
-  const affectedRecruitments = new Set();
-  
-  // テスト参加者を削除し、影響を受けた募集を収集
-  activeRecruitments.forEach((recruitment, id) => {
-    const initialCount = recruitment.participants.length;
-    
-    // テスト参加者を削除
-    recruitment.participants = recruitment.participants.filter(p => !p.isTestParticipant);
-    
-    if (initialCount !== recruitment.participants.length) {
-      affectedRecruitments.add(id);
-      activeRecruitments.set(id, recruitment);
-    }
-  });
-
-  // 影響を受けた募集メッセージを更新
-  for (const recruitmentId of affectedRecruitments) {
-    const recruitment = activeRecruitments.get(recruitmentId);
-    if (recruitment) {
-      await updateRecruitmentMessage(recruitment).catch(err => {
-        console.error(`メッセージ更新エラー (ID: ${recruitmentId}):`, err);
-      });
-    }
-  }
-
-  console.log(`テストモードが ${message.author.tag} によって終了されました（テスト参加者 ${testParticipantCount} 名を削除）`);
-}
-
-// ランダムな属性を生成
-function getRandomAttributes() {
-  const allAttributes = ['火', '水', '土', '風', '光', '闇'];
-  const shuffled = [...allAttributes].sort(() => 0.5 - Math.random());
-  // 1〜6個の属性をランダムに選択
-  const count = Math.floor(Math.random() * 6) + 1;
-  return shuffled.slice(0, count);
-}
-
-// ランダムな参加可能時間を生成
-function getRandomTimeAvailability() {
-  const times = ['今すぐ', '19:00', '20:00', '21:00', '22:00', '23:00'];
-  return times[Math.floor(Math.random() * times.length)];
-}
-
-// テスト参加者名を生成
-function generateTestParticipantName(index) {
-  const prefixes = ['テスト', 'Test', 'Bot', 'ダミー', 'Sample'];
-  const roles = ['騎空士', 'エース', 'サポーター', 'アタッカー', 'ヒーラー'];
-  
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-  const role = roles[Math.floor(Math.random() * roles.length)];
-  
-  return `[TEST${index}]${prefix}${role}`;
-}
-
-// テスト参加者追加処理
-async function addTestParticipants(message, recruitmentId, count) {
-  if (!testMode.active) {
-    return await message.reply('テストモードが開始されていません。`!テストモード開始` で開始してください。');
-  }
-
-  const recruitment = activeRecruitments.get(recruitmentId);
-  if (!recruitment) {
-    return await message.reply('指定された募集IDは存在しません。');
-  }
-
-  if (recruitment.status !== 'active') {
-    return await message.reply('この募集は既に終了しています。アクティブな募集にのみテスト参加者を追加できます。');
-  }
-
-  const addedParticipants = [];
-
-  // テスト参加者を追加
-  for (let i = 0; i < count; i++) {
-    const testUserId = `test-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 9)}`;
-    const testUsername = generateTestParticipantName(i + 1);
-    
-    // 参加タイプを決定
-    let joinType;
-    if (recruitment.type === '参加者希望') {
-      const types = ['天元', 'ルシゼロ', 'なんでも可'];
-      joinType = types[Math.floor(Math.random() * types.length)];
-    } else {
-      joinType = recruitment.type;
-    }
-
-    // 参加者データを作成
-    const testParticipant = {
-      userId: testUserId,
-      username: testUsername,
-      joinType: joinType,
-      attributes: getRandomAttributes(),
-      timeAvailability: getRandomTimeAvailability(),
-      assignedAttribute: null,
-      isTestParticipant: true // テスト参加者フラグ
-    };
-
-    recruitment.participants.push(testParticipant);
-    testMode.testParticipants.push(testParticipant);
-    addedParticipants.push(testParticipant);
-  }
-
-  try {
-    await updateRecruitmentMessage(recruitment);
-
-    // テスト参加者の詳細を表示
-    const embed = new EmbedBuilder()
-      .setTitle('🧪 テスト参加者が追加されました')
-      .setDescription(`募集ID: ${recruitmentId} に ${count} 名のテスト参加者を追加しました。`)
-      .setColor('#2196F3');
-
-    // 追加した参加者の詳細を表示
-    addedParticipants.forEach((p, index) => {
-      embed.addFields({
-        name: `${index + 1}. ${p.username}`,
-        value: `参加タイプ: ${p.joinType}\n属性: ${p.attributes.join(', ')}\n参加可能時間: ${p.timeAvailability}`
-      });
-    });
-
-    await message.reply({ embeds: [embed] });
-    
-    // 参加者が7人以上になった場合、自動割り振りを行う
-    if (recruitment.participants.length >= 7 && recruitment.status === 'active') {
-      await message.reply('参加者が7人以上になったため、自動割り振りを実行します...');
-      await autoAssignAttributes(recruitment);
-      await updateRecruitmentMessage(recruitment);
-    }
-
-    console.log(`${message.author.tag} が募集ID ${recruitmentId} に ${count} 名のテスト参加者を追加しました`);
-  } catch (error) {
-    console.error(`テスト参加者追加エラー: ${error.message}`);
-    await message.reply('テスト参加者の追加中にエラーが発生しました。');
-  }
-}
-
-// テスト参加者追加オプション表示
-async function showTestParticipantAddOptions(interaction, recruitmentId) {
-  if (!testMode.active) {
-    return await interaction.reply({
-      content: 'テストモードが有効ではありません。`!テストモード開始` で開始してください。',
-      ephemeral: true
-    });
-  }
-
-  const recruitment = activeRecruitments.get(recruitmentId);
-  if (!recruitment || recruitment.status !== 'active') {
-    return await interaction.reply({
-      content: 'この募集は既に終了しているか、存在しません。',
-      ephemeral: true
-    });
-  }
-
-  // 参加者数選択用セレクトメニュー
-  const row = new ActionRowBuilder()
-    .addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(`test_participant_count_${recruitmentId}`)
-        .setPlaceholder('追加するテスト参加者の人数を選択')
-        .addOptions([
-          { label: '1人', value: '1', description: 'テスト参加者を1人追加' },
-          { label: '3人', value: '3', description: 'テスト参加者を3人追加' },
-          { label: '5人', value: '5', description: 'テスト参加者を5人追加' },
-          { label: '7人', value: '7', description: 'テスト参加者を7人追加（自動割り振り閾値）' },
-          { label: '10人', value: '10', description: 'テスト参加者を10人追加' }
-        ])
-    );
-
-  const embed = new EmbedBuilder()
-    .setTitle('🧪 テスト参加者追加')
-    .setDescription('追加するテスト参加者の人数を選択してください。\n参加タイプ、属性、参加可能時間はランダムに設定されます。')
-    .setColor('#2196F3');
-
-  await interaction.reply({
-    embeds: [embed],
-    components: [row],
-    ephemeral: true
-  });
-}
-
-// テスト参加者追加確認UI表示
-async function showTestParticipantConfirmation(interaction, recruitmentId, count) {
-  const recruitment = activeRecruitments.get(recruitmentId);
-  if (!recruitment || recruitment.status !== 'active') {
-    return await interaction.update({
-      content: 'この募集は既に終了しているか、存在しません。',
-      embeds: [],
-      components: []
-    });
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle('🧪 テスト参加者追加確認')
-    .setDescription(`募集ID: ${recruitmentId} に ${count} 名のテスト参加者を追加します。\n\n` +
-      `現在の参加者数: ${recruitment.participants.length}名\n` +
-      `追加後の参加者数: ${recruitment.participants.length + count}名`)
-    .setColor('#2196F3');
-
-  const row = new ActionRowBuilder()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId(`confirm_test_participants_${recruitmentId}_${count}`)
-        .setLabel('追加する')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId('cancel_test_participants')
-        .setLabel('キャンセル')
-        .setStyle(ButtonStyle.Danger)
-    );
-
-  await interaction.update({
-    embeds: [embed],
-    components: [row]
-  });
-}
-
-// テスト参加者追加確定処理
-async function confirmAddTestParticipants(interaction, recruitmentId, count) {
-  if (!testMode.active) {
-    return await interaction.update({
-      content: 'テストモードが有効ではありません。',
-      embeds: [],
-      components: []
-    });
-  }
-
-  const recruitment = activeRecruitments.get(recruitmentId);
-  if (!recruitment || recruitment.status !== 'active') {
-    return await interaction.update({
-      content: 'この募集は既に終了しているか、存在しません。',
-      embeds: [],
-      components: []
-    });
-  }
-
-  const addedParticipants = [];
-
-  // テスト参加者を追加
-  for (let i = 0; i < count; i++) {
-    const testUserId = `test-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 9)}`;
-    const testUsername = generateTestParticipantName(i + 1);
-    
-    // 参加タイプを決定
-    let joinType;
-    if (recruitment.type === '参加者希望') {
-      const types = ['天元', 'ルシゼロ', 'なんでも可'];
-      joinType = types[Math.floor(Math.random() * types.length)];
-    } else {
-      joinType = recruitment.type;
-    }
-
-    // 参加者データを作成
-    const testParticipant = {
-      userId: testUserId,
-      username: testUsername,
-      joinType: joinType,
-      attributes: getRandomAttributes(),
-      timeAvailability: getRandomTimeAvailability(),
-      assignedAttribute: null,
-      isTestParticipant: true // テスト参加者フラグ
-    };
-
-    recruitment.participants.push(testParticipant);
-    testMode.testParticipants.push(testParticipant);
-    addedParticipants.push(testParticipant);
-  }
-
-  try {
-    // 募集メッセージの更新
-    await updateRecruitmentMessage(recruitment);
-
-    // 参加者が7人以上になった場合の自動割り振り
-    let autoAssignTriggered = false;
-    if (recruitment.participants.length >= 7 && recruitment.status === 'active') {
-      await autoAssignAttributes(recruitment);
-      await updateRecruitmentMessage(recruitment);
-      autoAssignTriggered = true;
-    }
-
-    await interaction.update({
-      content: `${count} 名のテスト参加者を追加しました。` + 
-        (autoAssignTriggered ? '\n\n**参加者が7人以上になったため、自動割り振りが実行されました。**' : ''),
-      embeds: [],
-      components: []
-    });
-
-    console.log(`${interaction.user.tag} が募集ID ${recruitmentId} に ${count} 名のテスト参加者を追加しました`);
-  } catch (error) {
-    console.error(`テスト参加者追加エラー: ${error.message}`);
-    await interaction.update({
-      content: 'テスト参加者の追加中にエラーが発生しました。',
-      embeds: [],
-      components: []
-    });
-  }
-}
 // サーバーを起動
 app.listen(PORT, () => {
   console.log(`監視用サーバーが起動しました: ポート ${PORT}`);
