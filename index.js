@@ -298,7 +298,7 @@ else if (message.content === '!IDリスト') {
     await message.reply(`エラーが発生しました: ${error.message}`);
   }
 }
-// client.on('messageCreate')のハンドラに追加
+// !追加 コマンドの処理部分を修正
 else if (message.content.startsWith('!追加 ')) {
   try {
     // 入力からIDを取得
@@ -332,10 +332,11 @@ else if (message.content.startsWith('!追加 ')) {
     // 確認メッセージ
     await message.reply(`ID "${id}" の募集に3名のテスト参加者を追加しました。\n現在の参加者数: ${recruitment.participants.length}名`);
     
-    // 7人以上なら自動割り振り
+    // 7人以上でも自動で締め切らないように修正（プレビューモードで実行）
     if (recruitment.participants.length >= 7 && recruitment.status === 'active') {
-      await message.channel.send('参加者が7人以上になったため、自動割り振りを実行します...');
-      await autoAssignAttributes(recruitment);
+      await message.channel.send('参加者が7人以上になったため、属性割り振りをプレビュー表示します...');
+      // プレビューモードで実行（true を渡す）
+      await autoAssignAttributes(recruitment, true);
       await updateRecruitmentMessage(recruitment);
     }
   } catch (error) {
@@ -377,7 +378,7 @@ else if (message.content.startsWith('!追加 ')) {
       await message.reply('このコマンドは管理者権限を持つユーザーのみが使用できます。');
     }
   }
-  // client.on('messageCreate')のハンドラに追加
+  // !直接テスト コマンドの処理部分を修正
 else if (message.content.startsWith('!直接テスト ')) {
   try {
     const params = message.content.replace('!直接テスト ', '').split(' ');
@@ -392,11 +393,27 @@ else if (message.content.startsWith('!直接テスト ')) {
     // テスト参加者を追加
     let addedCount = 0;
     for (let i = 0; i < count; i++) {
+      // より多様な属性の組み合わせを生成するように修正
+      const randomAttributes = [];
+      const allAttributes = ['火', '水', '土', '風', '光', '闇'];
+      
+      // 各属性について50%の確率で追加
+      allAttributes.forEach(attr => {
+        if (Math.random() > 0.5) {
+          randomAttributes.push(attr);
+        }
+      });
+      
+      // 少なくとも1つの属性は選択されるようにする
+      if (randomAttributes.length === 0) {
+        randomAttributes.push(allAttributes[Math.floor(Math.random() * allAttributes.length)]);
+      }
+      
       const testParticipant = {
         userId: `test-${Date.now()}-${i}`,
         username: `テスト参加者${i+1}`,
         joinType: recruitment.type,
-        attributes: ['火', '水', '土', '風', '光', '闇'].slice(0, 3),
+        attributes: randomAttributes,
         timeAvailability: '今すぐ',
         assignedAttribute: null,
         isTestParticipant: true
@@ -409,10 +426,11 @@ else if (message.content.startsWith('!直接テスト ')) {
     await updateRecruitmentMessage(recruitment);
     await message.reply(`${addedCount}名のテスト参加者を追加しました`);
     
-    // 参加者が7人以上になった場合、自動割り振りを行う
+    // 7人以上でも自動で締め切らないように修正（プレビューモードで実行）
     if (recruitment.participants.length >= 7 && recruitment.status === 'active') {
-      await message.reply('参加者が7人以上になったため、自動割り振りを実行します...');
-      await autoAssignAttributes(recruitment);
+      await message.reply('参加者が7人以上になったため、属性割り振りをプレビュー表示します...');
+      // プレビューモードで実行（true を渡す）
+      await autoAssignAttributes(recruitment, true);
       await updateRecruitmentMessage(recruitment);
     }
   } catch (error) {
@@ -1470,6 +1488,7 @@ async function updateRecruitmentMessage(recruitment) {
     console.error('募集メッセージ更新エラー:', error);
   }
 }
+
 // previewOnlyパラメータを追加
 async function autoAssignAttributes(recruitment, previewOnly = false) {
   console.log(`属性自動割り振り処理: ${recruitment.id}, 参加者数=${recruitment.participants.length}, プレビューモード=${previewOnly}`);
@@ -1648,8 +1667,10 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
   console.log(`未割り当て参加者: ${unassignedParticipants.length}名`);
   console.log(`空の属性: [${emptyAttributes.join(', ')}]`);
 
-  // 未割り当て参加者のうち、希望属性と一致するものだけを割り当てる
+  // 第1フェーズ: 希望属性が一致する参加者を割り当てる
   for (let i = 0; i < unassignedParticipants.length; i++) {
+    if (emptyAttributes.length === 0) break;
+    
     const participant = unassignedParticipants[i];
     
     // 参加者の希望属性と一致する未割り当ての属性を探す
@@ -1658,7 +1679,7 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
     );
     
     if (matchingAttrs.length > 0) {
-      // 希望属性と一致する場合のみ割り当てる
+      // 希望属性と一致する場合に割り当てる
       const attr = matchingAttrs[0];
       assignments[attr] = participant;
       participant.assignedAttribute = attr;
@@ -1669,9 +1690,25 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
         emptyAttributes.splice(attrIndex, 1);
       }
       
+      // 処理済みの参加者として記録
+      participant.processed = true;
+      
       console.log(`未割り当て参加者 ${participant.username} を ${attr} に割り当てました (希望一致)`);
-    } else {
-      console.log(`未割り当て参加者 ${participant.username} は希望属性と一致する空き属性がないため、割り当てません`);
+    }
+  }
+  
+  // 第2フェーズ: それでも残っている属性には希望に関わらず割り当てる（プレビューでない場合）
+  if (!previewOnly && emptyAttributes.length > 0) {
+    const remainingParticipants = unassignedParticipants.filter(p => !p.processed);
+    
+    for (let i = 0; i < Math.min(remainingParticipants.length, emptyAttributes.length); i++) {
+      const participant = remainingParticipants[i];
+      const attr = emptyAttributes[i];
+      
+      assignments[attr] = participant;
+      participant.assignedAttribute = attr;
+      
+      console.log(`未割り当て参加者 ${participant.username} を ${attr} に強制割り当てしました (希望外)`);
     }
   }
 
