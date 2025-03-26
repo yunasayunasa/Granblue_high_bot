@@ -1190,30 +1190,10 @@ async function processConfirmation(interaction, recruitmentId) {
   tempUserData.delete(interaction.user.id);
 }
 
+// 重複している関数を1つだけにする
+// 以下の関数を使用
+
 // 参加確定処理
-async function confirmParticipation(interaction, recruitmentId, joinType, selectedAttributes, timeAvailability) {
-  console.log(`参加確定処理: ${recruitmentId}, ${joinType}, 時間=${timeAvailability}`);
-  
-  const recruitment = activeRecruitments.get(recruitmentId);
-  if (!recruitment || recruitment.status !== 'active') {
-    return await interaction.update({
-      content: 'この募集は既に終了しているか、存在しません。',
-      embeds: [],
-      components: []
-    });
-  }
-
-  // 参加者データを作成
-  const participantData = {
-    userId: interaction.user.id,
-    username: interaction.user.username,
-    joinType: joinType,
-    attributes: selectedAttributes,
-    timeAvailability: timeAvailability,
-    assignedAttribute: null // 割り当ては後で行う
-  };
-
-  // 参加確定処理
 async function confirmParticipation(interaction, recruitmentId, joinType, selectedAttributes, timeAvailability) {
   console.log(`参加確定処理: ${recruitmentId}, ${joinType}, 時間=${timeAvailability}`);
   
