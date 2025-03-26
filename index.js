@@ -1213,6 +1213,29 @@ async function confirmParticipation(interaction, recruitmentId, joinType, select
     assignedAttribute: null // 割り当ては後で行う
   };
 
+  // 参加確定処理
+async function confirmParticipation(interaction, recruitmentId, joinType, selectedAttributes, timeAvailability) {
+  console.log(`参加確定処理: ${recruitmentId}, ${joinType}, 時間=${timeAvailability}`);
+  
+  const recruitment = activeRecruitments.get(recruitmentId);
+  if (!recruitment || recruitment.status !== 'active') {
+    return await interaction.update({
+      content: 'この募集は既に終了しているか、存在しません。',
+      embeds: [],
+      components: []
+    });
+  }
+
+  // 参加者データを作成
+  const participantData = {
+    userId: interaction.user.id,
+    username: interaction.user.username,
+    joinType: joinType,
+    attributes: selectedAttributes,
+    timeAvailability: timeAvailability,
+    assignedAttribute: null // 割り当ては後で行う
+  };
+
   // すでに参加している場合は情報を更新
   const existingIndex = recruitment.participants.findIndex(p => p.userId === interaction.user.id);
 
@@ -1229,14 +1252,6 @@ async function confirmParticipation(interaction, recruitmentId, joinType, select
   
   // 募集メッセージの更新
   await updateRecruitmentMessage(recruitment);
-
-  // 参加者が7人以上の場合、自動割り振りを行う
-if (recruitment.participants.length >= 7 && recruitment.status === 'active') {
-  // true を追加してプレビューモードで実行
-  await autoAssignAttributes(recruitment, true);
-  // 割り振り後にメッセージを再度更新
-  await updateRecruitmentMessage(recruitment);
-}
 
   await interaction.update({
     content: '参加申込が完了しました！',
@@ -1362,7 +1377,12 @@ async function updateRecruitmentMessage(recruitment) {
     if (recruitment.status === 'active') {
       description += '🟢 **募集中**\n参加希望の方は下のボタンから申し込んでください。\n\n';
     } else if (recruitment.status === 'closed' || recruitment.status === 'assigned') {
+      description += '🔴 **募集終了**\n';
       
+      // 参加者希望の場合、選ばれたコンテンツを表示
+      if (recruitment.type === '参加者希望' && recruitment.finalRaidType) {
+        description += `**選択されたコンテンツ: ${recruitment.finalRaidType}**\n`;
+      }
 
       // 最終的な開催時間と日付を表示
       if (recruitment.finalTime) {
@@ -1412,7 +1432,7 @@ async function updateRecruitmentMessage(recruitment) {
           value = `<@${assignedParticipant.userId}>`;
         }
       } else {
-        // 募集中の場合は各属性の希望者数を表示
+        // 通常の募集中の場合は各属性の希望者数を表示
         const count = participantsByAttribute[attr].length;
         value = count > 0 ? `${count}名が希望` : '未定';
       }
@@ -1421,7 +1441,7 @@ async function updateRecruitmentMessage(recruitment) {
     });
 
     embed.addFields(fields);
-    embed.setFooter({ text: `募集ID: ${recruitment.id} | ${recruitment.status === 'active' ? '開催日の夕方5時に自動締め切り' : '募集終了'}` });
+    embed.setFooter({ text: `募集ID: ${recruitment.id} | ${recruitment.status === 'active' ? '開催日の朝8時に自動締め切り' : '募集終了'}` });
 
     // ボタン行を作成（募集中の場合のみ有効）
     const joinRow = new ActionRowBuilder()
@@ -1444,26 +1464,26 @@ async function updateRecruitmentMessage(recruitment) {
       );
 
     // components変数を定義（現時点ではjoinRowだけ）
-const components = [joinRow];
+    const components = [joinRow];
 
-// テストモードがアクティブな場合のみテスト参加者追加ボタンを表示
-if (testMode.active && recruitment.status === 'active') {
-  const testRow = new ActionRowBuilder()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId(`add_test_participants_${recruitment.id}`)
-        .setLabel('🧪 テスト参加者追加')
-        .setStyle(ButtonStyle.Secondary)
-    );
-  components.push(testRow);
-}
+    // テストモードがアクティブな場合のみテスト参加者追加ボタンを表示
+    if (testMode.active && recruitment.status === 'active') {
+      const testRow = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`add_test_participants_${recruitment.id}`)
+            .setLabel('🧪 テスト参加者追加')
+            .setStyle(ButtonStyle.Secondary)
+        );
+      components.push(testRow);
+    }
 
-// メッセージを更新
-await message.edit({
-  content: recruitment.status === 'active' ? '**【募集中】**' : '**【募集終了】**',
-  embeds: [embed],
-  components: components
-});
+    // メッセージを更新
+    await message.edit({
+      content: recruitment.status === 'active' ? '**【募集中】**' : '**【募集終了】**',
+      embeds: [embed],
+      components: components
+    });
     
     console.log(`募集メッセージ更新完了: ${recruitment.id}`);
   } catch (error) {
@@ -1472,7 +1492,7 @@ await message.edit({
 }
 // previewOnlyパラメータを追加
 async function autoAssignAttributes(recruitment, previewOnly = false) {
-  console.log(`属性自動割り振り処理: ${recruitment.id}, 参加者数=${recruitment.participants.length}`);
+  console.log(`属性自動割り振り処理: ${recruitment.id}, 参加者数=${recruitment.participants.length}, プレビューモード=${previewOnly}`);
   
   // 割り振りが必要ない場合
   if (recruitment.participants.length === 0) {
@@ -1488,11 +1508,6 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
     console.log(`プレビューモード: ステータスは変更しません`);
   }
 
-  // 以下、既存の割り振り処理...
-
-  recruitment.status = 'assigned';
-  console.log(`ステータスを'assigned'に変更しました`);
-
   // 時間帯ごとに参加者をグループ化
   const participantsByTime = {};
   recruitment.participants.forEach(p => {
@@ -1507,18 +1522,18 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
   console.log(`利用可能な時間枠: ${timeSlots.join(', ')}`);
 
   // 時間枠の順序マップを作成（数値が大きいほど遅い時間）
-const timeOrder = {
-  '今すぐ': 0,
-  '00:00': 1, '01:00': 2, '02:00': 3, '03:00': 4, '04:00': 5,
-  '05:00': 6, '06:00': 7, '07:00': 8, '08:00': 9, '09:00': 10,
-  '10:00': 11, '11:00': 12, '12:00': 13, '13:00': 14, '14:00': 15,
-  '15:00': 16, '16:00': 17, '17:00': 18, '18:00': 19, '19:00': 20,
-  '20:00': 21, '21:00': 22, '22:00': 23, '23:00': 24
-};
+  const timeOrder = {
+    '今すぐ': 0,
+    '00:00': 1, '01:00': 2, '02:00': 3, '03:00': 4, '04:00': 5,
+    '05:00': 6, '06:00': 7, '07:00': 8, '08:00': 9, '09:00': 10,
+    '10:00': 11, '11:00': 12, '12:00': 13, '13:00': 14, '14:00': 15,
+    '15:00': 16, '16:00': 17, '17:00': 18, '18:00': 19, '19:00': 20,
+    '20:00': 21, '21:00': 22, '22:00': 23, '23:00': 24
+  };
 
-// 最も遅い時間帯を見つける
-let latestTimeSlot = timeSlots[0] || 'デフォルト';
-let latestTimeValue = timeOrder[latestTimeSlot] || 0;
+  // 最も遅い時間帯を見つける
+  let latestTimeSlot = timeSlots[0] || 'デフォルト';
+  let latestTimeValue = timeOrder[latestTimeSlot] || 0;
 
   // レイドタイプに適合するすべての参加者を収集
   let allEligibleParticipants = [];
@@ -1538,22 +1553,20 @@ let latestTimeValue = timeOrder[latestTimeSlot] || 0;
     
     console.log(`時間枠 ${timeSlot}: ${filteredParticipants.length}名が参加可能`);
 
-    // すべての対象参加者を集める (重要な変更点)
+    // すべての対象参加者を集める
     allEligibleParticipants = allEligibleParticipants.concat(filteredParticipants);
 
     // 時間枠の値を取得（定義されていなければ0）
-  const timeValue = timeOrder[timeSlot] || 0;
+    const timeValue = timeOrder[timeSlot] || 0;
   
-  // より遅い時間枠を見つけた場合に更新
-  if (timeValue > latestTimeValue && filteredParticipants.length > 0) {
-    latestTimeValue = timeValue;
-    latestTimeSlot = timeSlot;
-  }
-});
+    // より遅い時間枠を見つけた場合に更新
+    if (timeValue > latestTimeValue && filteredParticipants.length > 0) {
+      latestTimeValue = timeValue;
+      latestTimeSlot = timeSlot;
+    }
+  });
 
-console.log(`最適な時間枠: ${latestTimeSlot} (最も遅い時間)`);
-  
-  console.log(`最適な時間枠: ${bestTimeSlot} (参加者数: ${maxParticipants}名)`);
+  console.log(`最適な時間枠: ${latestTimeSlot} (最も遅い時間)`);
   console.log(`合計の対象参加者数: ${allEligibleParticipants.length}名 (全時間帯合計)`);
   
   // 一番参加者が多い時間帯のレイドタイプを決定（参加者希望の場合のみ）
@@ -1566,9 +1579,11 @@ console.log(`最適な時間枠: ${latestTimeSlot} (最も遅い時間)`);
     allEligibleParticipants.forEach(p => {
       if (p.joinType === '天元') tengenCount++;
       else if (p.joinType === 'ルシゼロ') luciZeroCount++;
-         // なんでも可の場合は両方にカウント（若干少なめに）
-      tengenCount += 0.5; // 半分ずつカウント
-      luciZeroCount += 0.5;
+      else if (p.joinType === 'なんでも可') {
+        // なんでも可の場合は両方にカウント（若干少なめに）
+        tengenCount += 0.5; // 半分ずつカウント
+        luciZeroCount += 0.5;
+      }
     });
 
     raidTypeToAssign = tengenCount > luciZeroCount ? '天元' : 'ルシゼロ';
@@ -1590,7 +1605,7 @@ console.log(`最適な時間枠: ${latestTimeSlot} (最も遅い時間)`);
   const assignments = {};
   const attributeCounts = {};
   
-  // 各属性の希望者数をカウント
+  // 各属性の希望者数をカウント初期化
   attributes.forEach(attr => {
     attributeCounts[attr] = 0;
   });
@@ -1645,6 +1660,13 @@ console.log(`最適な時間枠: ${latestTimeSlot} (最も遅い時間)`);
       console.log(`${participant.username}に割り当て可能な属性がありません`);
     }
   }
+
+  // 埋まっていない属性を、まだ割り当てられていない参加者で埋める
+  const unassignedParticipants = eligibleParticipants.filter(p => !p.assignedAttribute);
+  const emptyAttributes = attributes.filter(attr => !assignments[attr]);
+  
+  console.log(`未割り当て参加者: ${unassignedParticipants.length}名`);
+  console.log(`空の属性: [${emptyAttributes.join(', ')}]`);
 
   // 未割り当て参加者のうち、希望属性と一致するものだけを割り当てる
   for (let i = 0; i < unassignedParticipants.length; i++) {
