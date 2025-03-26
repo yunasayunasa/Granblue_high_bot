@@ -311,19 +311,50 @@ else if (message.content.startsWith('!追加 ')) {
       return message.reply(`ID "${id}" の募集は存在しません。`);
     }
     
-    // 3人のテスト参加者を追加
+    // 3人のテスト参加者を追加（より多様な設定で）
     for (let i = 0; i < 3; i++) {
+      // 参加タイプをランダムに設定
+      let joinType;
+      if (recruitment.type === '参加者希望') {
+        const types = ['天元', 'ルシゼロ', 'なんでも可'];
+        joinType = types[Math.floor(Math.random() * types.length)];
+      } else {
+        joinType = recruitment.type;
+      }
+      
+      // 属性を多様にする
+      const possibleAttributes = ['火', '水', '土', '風', '光', '闇'];
+      const selectedAttributes = [];
+      
+      // 各属性について30%〜50%の確率で選択する
+      possibleAttributes.forEach(attr => {
+        if (Math.random() < 0.4) {
+          selectedAttributes.push(attr);
+        }
+      });
+      
+      // 少なくとも1つは選択されるようにする
+      if (selectedAttributes.length === 0) {
+        selectedAttributes.push(possibleAttributes[Math.floor(Math.random() * possibleAttributes.length)]);
+      }
+      
+      // 時間もランダムに設定
+      const possibleTimes = ['今すぐ', '19:00', '20:00', '21:00', '22:00', '23:00'];
+      const selectedTime = possibleTimes[Math.floor(Math.random() * possibleTimes.length)];
+      
+      // 参加者データを作成
       const participant = {
         userId: `test-${i}-${Date.now()}`,
         username: `[TEST] 参加者${i+1}`,
-        joinType: recruitment.type,
-        attributes: ['火', '水', '土'],
-        timeAvailability: '今すぐ',
+        joinType: joinType,
+        attributes: selectedAttributes,
+        timeAvailability: selectedTime,
         assignedAttribute: null,
         isTestParticipant: true
       };
       
       recruitment.participants.push(participant);
+      console.log(`テスト参加者を追加: ${participant.username}, 参加タイプ=${joinType}, 属性=[${selectedAttributes.join(',')}], 時間=${selectedTime}`);
     }
     
     // メッセージ更新
@@ -393,34 +424,66 @@ else if (message.content.startsWith('!直接テスト ')) {
     // テスト参加者を追加
     let addedCount = 0;
     for (let i = 0; i < count; i++) {
-      // より多様な属性の組み合わせを生成するように修正
-      const randomAttributes = [];
-      const allAttributes = ['火', '水', '土', '風', '光', '闇'];
+      // 参加タイプをランダムに設定
+      let joinType;
+      if (recruitment.type === '参加者希望') {
+        const types = ['天元', 'ルシゼロ', 'なんでも可'];
+        joinType = types[Math.floor(Math.random() * types.length)];
+      } else {
+        joinType = recruitment.type;
+      }
       
-      // 各属性について50%の確率で追加
-      allAttributes.forEach(attr => {
-        if (Math.random() > 0.5) {
-          randomAttributes.push(attr);
+      // 属性を多様にする（強化版）
+      const possibleAttributes = ['火', '水', '土', '風', '光', '闇'];
+      const selectedAttributes = [];
+      
+      // 既存の参加者にない属性を選びやすくする（属性の均等分布を促進）
+      const attributeCounts = {};
+      possibleAttributes.forEach(attr => attributeCounts[attr] = 0);
+      
+      // 現在の参加者の属性分布を集計
+      recruitment.participants.forEach(p => {
+        p.attributes.forEach(attr => {
+          if (attributeCounts[attr] !== undefined) {
+            attributeCounts[attr]++;
+          }
+        });
+      });
+      
+      // 希少属性をより選びやすくする
+      possibleAttributes.forEach(attr => {
+        // 希少な属性ほど選ばれやすくする
+        const selectionProbability = 0.3 + (0.3 / (attributeCounts[attr] + 1));
+        if (Math.random() < selectionProbability) {
+          selectedAttributes.push(attr);
         }
       });
       
-      // 少なくとも1つの属性は選択されるようにする
-      if (randomAttributes.length === 0) {
-        randomAttributes.push(allAttributes[Math.floor(Math.random() * allAttributes.length)]);
+      // 少なくとも1つは選択されるようにする
+      if (selectedAttributes.length === 0) {
+        // 最も希少な属性を選ぶ
+        const rareAttributes = [...possibleAttributes].sort((a, b) => attributeCounts[a] - attributeCounts[b]);
+        selectedAttributes.push(rareAttributes[0]);
       }
+      
+      // 時間もランダムに設定
+      const possibleTimes = ['今すぐ', '19:00', '20:00', '21:00', '22:00', '23:00'];
+      const selectedTime = possibleTimes[Math.floor(Math.random() * possibleTimes.length)];
       
       const testParticipant = {
         userId: `test-${Date.now()}-${i}`,
         username: `テスト参加者${i+1}`,
-        joinType: recruitment.type,
-        attributes: randomAttributes,
-        timeAvailability: '今すぐ',
+        joinType: joinType,
+        attributes: selectedAttributes,
+        timeAvailability: selectedTime,
         assignedAttribute: null,
         isTestParticipant: true
       };
       
       recruitment.participants.push(testParticipant);
       addedCount++;
+      
+      console.log(`テスト参加者を追加: ${testParticipant.username}, 参加タイプ=${joinType}, 属性=[${selectedAttributes.join(',')}], 時間=${selectedTime}`);
     }
     
     await updateRecruitmentMessage(recruitment);
@@ -1319,8 +1382,8 @@ async function closeRecruitment(interaction, recruitmentId) {
   recruitment.status = 'closed';
   console.log(`募集を締め切り: ${recruitmentId}, 参加者数: ${recruitment.participants.length}`);
 
-  // 属性の自動割り振りを実行
-  await autoAssignAttributes(recruitment);
+  // 属性の自動割り振りを実行 (プレビューモードではなく、実際に割り振る)
+  await autoAssignAttributes(recruitment, false);
 
   // 募集メッセージの更新
   await updateRecruitmentMessage(recruitment);
@@ -1488,7 +1551,6 @@ async function updateRecruitmentMessage(recruitment) {
     console.error('募集メッセージ更新エラー:', error);
   }
 }
-
 // previewOnlyパラメータを追加
 async function autoAssignAttributes(recruitment, previewOnly = false) {
   console.log(`属性自動割り振り処理: ${recruitment.id}, 参加者数=${recruitment.participants.length}, プレビューモード=${previewOnly}`);
@@ -1600,6 +1662,11 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
   
   console.log(`割り振り対象参加者数: ${eligibleParticipants.length}名 (全時間帯から適合者)`);
 
+  // ユーザーごとと対象の参加者をデバッグ出力
+  eligibleParticipants.forEach(p => {
+    console.log(`対象参加者: ${p.username}, 参加タイプ=${p.joinType}, 属性=[${p.attributes.join(',')}], 時間=${p.timeAvailability}`);
+  });
+
   // 属性の割り振り処理 (改善版)
   const assignments = {};
   const attributeCounts = {};
@@ -1625,11 +1692,12 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
     p.attributes.forEach(attr => {
       // 希望者が少ないほど高スコア = 1/希望者数
       // 例: 希望者1人→スコア1.0、希望者2人→スコア0.5
-      p.attributeScores[attr] = 1 / attributeCounts[attr];
+      p.attributeScores[attr] = 1 / Math.max(1, attributeCounts[attr]);
     });
     
     // 参加者の優先スコア = 選択属性の少なさ + 属性の希少性
-    p.priorityScore = (10 / p.attributes.length) + Math.max(...Object.values(p.attributeScores));
+    p.priorityScore = (10 / Math.max(1, p.attributes.length)) + 
+                       (p.attributes.length > 0 ? Math.max(...Object.values(p.attributeScores)) : 0);
   });
   
   // 参加者を優先スコア降順でソート (スコアが高い人から割り当て)
@@ -1699,7 +1767,10 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
   
   // 第2フェーズ: それでも残っている属性には希望に関わらず割り当てる（プレビューでない場合）
   if (!previewOnly && emptyAttributes.length > 0) {
+    // 処理されていない未割り当て参加者を取得
     const remainingParticipants = unassignedParticipants.filter(p => !p.processed);
+    
+    console.log(`空の属性に割り当て可能な残り参加者: ${remainingParticipants.length}名`);
     
     for (let i = 0; i < Math.min(remainingParticipants.length, emptyAttributes.length); i++) {
       const participant = remainingParticipants[i];
@@ -1710,6 +1781,8 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
       
       console.log(`未割り当て参加者 ${participant.username} を ${attr} に強制割り当てしました (希望外)`);
     }
+  } else if (previewOnly && emptyAttributes.length > 0) {
+    console.log(`プレビューモードのため、残りの ${emptyAttributes.length} 属性は空のままにします`);
   }
 
   // 割り当て結果を元の参加者リストに反映
