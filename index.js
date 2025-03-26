@@ -1362,28 +1362,7 @@ async function updateRecruitmentMessage(recruitment) {
     if (recruitment.status === 'active') {
       description += '🟢 **募集中**\n参加希望の方は下のボタンから申し込んでください。\n\n';
     } else if (recruitment.status === 'closed' || recruitment.status === 'assigned') {
-      // 7人以上でプレビュー表示を追加
-  if (recruitment.participants.length >= 7) {
-    description += '**【割り振りプレビュー】**\n';
-    description += '7人以上の参加者がいるため、割り振りプレビューを表示しています。\n';
-    
-    // 参加者希望の場合、選ばれたコンテンツを表示
-    if (recruitment.type === '参加者希望' && recruitment.finalRaidType) {
-      description += `**選択されたコンテンツ: ${recruitment.finalRaidType}**\n`;
-    }
-    
-    if (recruitment.finalTime) {
-      description += `**予定開始時間: ${recruitment.finalTime}**\n\n`;
-    }
-  }
-  
-} else if (recruitment.status === 'closed' || recruitment.status === 'assigned') {
-  description += '🔴 **募集終了**\n';
-  
-  // 参加者希望の場合、選ばれたコンテンツを表示
-  if (recruitment.type === '参加者希望' && recruitment.finalRaidType) {
-    description += `**選択されたコンテンツ: ${recruitment.finalRaidType}**\n`;
-  }
+      
 
       // 最終的な開催時間と日付を表示
       if (recruitment.finalTime) {
@@ -1667,44 +1646,31 @@ console.log(`最適な時間枠: ${latestTimeSlot} (最も遅い時間)`);
     }
   }
 
-  // 埋まっていない属性を、まだ割り当てられていない参加者で埋める
-  const unassignedParticipants = eligibleParticipants.filter(p => !p.assignedAttribute);
-  const emptyAttributes = attributes.filter(attr => !assignments[attr]);
-  
-  console.log(`未割り当て参加者: ${unassignedParticipants.length}名`);
-  console.log(`空の属性: [${emptyAttributes.join(', ')}]`);
-
-  // 未割り当て参加者を、そのユーザーの希望属性との重複が多い順に並べる
-  for (let i = 0; i < Math.min(unassignedParticipants.length, emptyAttributes.length); i++) {
-    // 最も適切な未割り当て参加者を探す
-    let bestParticipantIndex = 0;
-    let highestMatchScore = -1;
+  // 未割り当て参加者のうち、希望属性と一致するものだけを割り当てる
+  for (let i = 0; i < unassignedParticipants.length; i++) {
+    const participant = unassignedParticipants[i];
     
-    for (let j = 0; j < unassignedParticipants.length; j++) {
-      const participant = unassignedParticipants[j];
-      const matchScore = emptyAttributes.filter(attr => participant.attributes.includes(attr)).length;
+    // 参加者の希望属性と一致する未割り当ての属性を探す
+    const matchingAttrs = emptyAttributes.filter(attr => 
+      participant.attributes.includes(attr)
+    );
+    
+    if (matchingAttrs.length > 0) {
+      // 希望属性と一致する場合のみ割り当てる
+      const attr = matchingAttrs[0];
+      assignments[attr] = participant;
+      participant.assignedAttribute = attr;
       
-      if (matchScore > highestMatchScore) {
-        highestMatchScore = matchScore;
-        bestParticipantIndex = j;
+      // 処理済みの属性をリストから削除
+      const attrIndex = emptyAttributes.indexOf(attr);
+      if (attrIndex !== -1) {
+        emptyAttributes.splice(attrIndex, 1);
       }
+      
+      console.log(`未割り当て参加者 ${participant.username} を ${attr} に割り当てました (希望一致)`);
+    } else {
+      console.log(`未割り当て参加者 ${participant.username} は希望属性と一致する空き属性がないため、割り当てません`);
     }
-    
-    const participant = unassignedParticipants[bestParticipantIndex];
-    
-    // 参加者の希望と一致する空属性があれば、それを優先
-    const matchingAttrs = emptyAttributes.filter(attr => participant.attributes.includes(attr));
-    const attr = matchingAttrs.length > 0 ? matchingAttrs[0] : emptyAttributes[0];
-    
-    // 割り当て実行
-    assignments[attr] = participant;
-    participant.assignedAttribute = attr;
-    
-    // 処理済みの項目をリストから削除
-    unassignedParticipants.splice(bestParticipantIndex, 1);
-    emptyAttributes.splice(emptyAttributes.indexOf(attr), 1);
-    
-    console.log(`未割り当て参加者 ${participant.username} を ${attr} に割り当てました (希望${matchingAttrs.length > 0 ? '一致' : '外'})`);
   }
 
   // 割り当て結果を元の参加者リストに反映
