@@ -13,8 +13,7 @@ const {
 // 環境変数をロード
 require('dotenv').config();
 
-
-// ★★★ 変更点: fs と path を使う ★★★
+// ファイルシステムモジュールをインポート (ここに追加)
 const fs = require('fs');
 const path = require('path');
 
@@ -26,13 +25,8 @@ const testMode = {
 
 // グローバルなエラーハンドリングを追加
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('===== 未処理のPromise拒否が発生しました =====');
-  console.error('理由:', reason);
-  if (reason instanceof Error) {
-    console.error('スタックトレース:', reason.stack);
-  }
-  console.error('Promise:', promise);
-  console.error('========================================');
+  console.error('未処理のPromise拒否:');
+  console.error(reason);
 });
 
 // ボットの基本設定
@@ -46,20 +40,8 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message, Partials.Reaction]
 });
 
-// ★★★ 変更点: データ保存パスを Northflank 永続ボリュームに変更 ★★★
-const DATA_DIR = '/data'; // Northflankの永続ボリュームマウントパス
-const DATA_FILE_PATH = path.join(DATA_DIR, 'recruitment_data.json');
-
-// 起動時にデータディレクトリが存在するか確認し、なければ作成
-try {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    console.log(`データディレクトリを作成しました: ${DATA_DIR}`);
-  }
-} catch (error) {
-  console.error('データディレクトリの確認/作成中にエラー:', error);
-  // 起動を継続するか、エラーで終了するかは要検討
-}
+// データ保存用のファイルパス (グローバル変数の近くに追加)
+const DATA_FILE_PATH = path.join(__dirname, 'recruitment_data.json');
 
 // グローバル変数
 let activeRecruitments = new Map(); // 現在進行中の募集を保持
@@ -88,45 +70,39 @@ function debugLog(tag, message, data = null) {
   if (data) console.log(JSON.stringify(data, null, 2));
 }
 
-// ★★★ 変更点: loadRecruitmentData のパスを修正 ★★★
+// 募集データのロード処理 - client.onceの外に正しく配置
 function loadRecruitmentData() {
   try {
+    // fsモジュールを関数内でrequire
+    const fs = require('fs');
+    const path = require('path');
+    
+    // /tmp ディレクトリから読み込み
+    const dataFilePath = path.join('/tmp', 'recruitment_data.json');
+    
     // ファイルが存在するか確認
-    if (fs.existsSync(DATA_FILE_PATH)) {
+    if (fs.existsSync(dataFilePath)) {
       console.log('保存されていた募集データをロードします...');
-      const data = fs.readFileSync(DATA_FILE_PATH, 'utf8');
-      // ファイルが空でないかチェック
-      if (data.trim() === '') {
-         console.log('データファイルは空です。新規に開始します。');
-         return new Map();
-      }
+      const data = fs.readFileSync(dataFilePath, 'utf8');
       const parsedData = JSON.parse(data);
-
+      
       // 読み込んだデータをMapに変換
       const loadedRecruitments = new Map();
       let activeCount = 0;
-
+      
       Object.entries(parsedData).forEach(([id, recruitment]) => {
         loadedRecruitments.set(id, recruitment);
         if (recruitment.status === 'active') activeCount++;
       });
-
+      
       console.log(`${loadedRecruitments.size}件の募集データをロードしました（アクティブ: ${activeCount}件）`);
       return loadedRecruitments;
     } else {
-      console.log(`保存された募集データファイルが見つかりません (${DATA_FILE_PATH})。新規に開始します。`);
+      console.log('保存された募集データはありません。新規に開始します。');
       return new Map();
     }
   } catch (error) {
-    // JSONパースエラーなどを考慮
-    if (error instanceof SyntaxError) {
-        console.error(`募集データのJSONパース中にエラーが発生しました (${DATA_FILE_PATH}):`, error);
-        console.error('データファイルが破損している可能性があります。バックアップから復元するか、ファイルをリセットしてください。');
-        // ここでファイルをリネームして退避させるなどの処理も考えられる
-        // fs.renameSync(DATA_FILE_PATH, `${DATA_FILE_PATH}.${Date.now()}.bak`);
-    } else {
-        console.error(`募集データのロード中に予期せぬエラーが発生しました (${DATA_FILE_PATH}):`, error);
-    }
+    console.error('募集データのロード中にエラーが発生しました:', error);
     return new Map(); // エラー時は空のMapを返す
   }
 }
@@ -180,20 +156,27 @@ client.once('ready', () => {
 });
 
 
-// ★★★ 変更点: saveRecruitmentData のパスを修正 ★★★
+// 募集データの保存処理
 function saveRecruitmentData() {
   try {
+    // fsモジュールを関数内でrequire
+    const fs = require('fs');
+    const path = require('path');
+    
+    // 書き込み可能な /tmp ディレクトリを使用 (Renderの環境でも書き込み可能)
+    const dataFilePath = path.join('/tmp', 'recruitment_data.json');
+    
     // MapをJSONに変換可能なオブジェクトに変換
     const dataToSave = {};
     activeRecruitments.forEach((recruitment, id) => {
       dataToSave[id] = recruitment;
     });
-
-    // ファイルに保存 (DATA_FILE_PATH は /data 配下を指している)
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(dataToSave, null, 2), 'utf8');
-    // console.log(`${activeRecruitments.size}件の募集データを保存しました: ${DATA_FILE_PATH}`); // デバッグ用にパス表示
+    
+    // ファイルに保存
+    fs.writeFileSync(dataFilePath, JSON.stringify(dataToSave, null, 2), 'utf8');
+    console.log(`${activeRecruitments.size}件の募集データを保存しました`);
   } catch (error) {
-    console.error(`募集データの保存中にエラーが発生しました (${DATA_FILE_PATH}):`, error);
+    console.error('募集データの保存中にエラーが発生しました:', error);
   }
 }
 
@@ -2251,72 +2234,90 @@ process.on('unhandledRejection', error => {
 // まず監視サーバーを起動
 const express = require('express');
 const app = express();
-/* ... Express ルート設定 ... */
-app.get('/', (req, res) => res.status(200).send('Bot is running!'));
-app.get('/health', (req, res) => { /* ... */ });
-app.get('/ping', (req, res) => res.status(200).send('pong'));
-app.get('*', (req, res) => res.status(200).send('Bot is running! (Unknown route)'));
-app.use((err, req, res, next) => { /* ... */ });
+const PORT = process.env.PORT || 10000;
 
-process.on('uncaughtException', (err, origin) => {
-  console.error('===== 未処理の例外が発生しました =====');
-  console.error('エラー:', err);
-  console.error('発生元:', origin);
-  console.error('スタックトレース:', err.stack);
-  console.error('===================================');
-  // ★ 緊急データ保存 ★
-  try {
-      console.log('[uncaughtException] データの緊急保存を試みます...');
-      saveRecruitmentData();
-      console.log('[uncaughtException] データ保存試行完了。');
-  } catch (saveError) {
-      console.error('[uncaughtException] 緊急データ保存中にさらにエラーが発生しました:', saveError);
-  } finally {
-      console.log('[uncaughtException] 致命的なエラーのため、1秒後にプロセスを終了します...');
-      setTimeout(() => process.exit(1), 1000);
-  }
+// ルートパス
+app.get('/', (req, res) => {
+  res.status(200).send('Bot is running!');
 });
 
-let expressServerInstance = null;
-const gracefulShutdown = () => {
-  console.log('グレースフルシャットダウンを開始します...');
-  try {
-      console.log('終了前にデータを保存します...');
-      saveRecruitmentData(); // ★ シャットダウン時のデータ保存 ★
-      console.log('データ保存完了。');
-  } catch (saveError) {
-      console.error('シャットダウン時のデータ保存中にエラーが発生しました:', saveError);
-  } finally {
-      console.log('Discordクライアントを切断します...');
-      if (client) client.destroy();
-      console.log('Expressサーバーをシャットダウンします...');
-      if (expressServerInstance) {
-          expressServerInstance.close(() => {
-              console.log('Expressサーバーが正常に閉じられました。');
-              console.log('プロセスを終了します。');
-              process.exit(0);
-          });
-          setTimeout(() => {
-              console.error('シャットダウンがタイムアウトしました。強制終了します。');
-              process.exit(1);
-          }, 5000);
-      } else {
-          console.log('Expressサーバーインスタンスが見つからないため、すぐにプロセスを終了します。');
-          process.exit(0);
-      }
-  }
-};
+// 健康状態チェック用エンドポイント
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'up',
+    message: 'Bot is operational',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    activeRecruitments: activeRecruitments.size
+  });
+});
 
+// ping用シンプルエンドポイント (UptimeRobot推奨)
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
+// 他のルートへのアクセスをキャッチするフォールバック
+app.get('*', (req, res) => {
+  res.status(200).send('Bot is running! (Unknown route)');
+});
+
+// エラーハンドリング
+app.use((err, req, res, next) => {
+  console.error('Expressサーバーエラー:', err);
+  res.status(500).send('サーバーエラーが発生しました');
+});
+
+app.use((err, req, res, next) => {
+  console.error('Expressサーバーエラー:', err);
+  res.status(500).send('サーバーエラーが発生しました');
+});
+
+// 未処理の例外をキャッチ
+process.on('uncaughtException', (err) => {
+  console.error('未処理の例外:', err);
+  // エラー発生時にデータを保存
+  saveRecruitmentData();
+  // 深刻なエラーの場合は安全に再起動
+  setTimeout(() => {
+    console.log('安全なシャットダウンを実行します...');
+    process.exit(1);  // 終了コード1でプロセス終了（サーバーは自動的に再起動）
+  }, 1000);
+});
+
+// プロセスシグナルをハンドリング
 process.on('SIGTERM', () => {
-  console.log('SIGTERMを受信しました。');
-  gracefulShutdown();
+  console.log('SIGTERMを受信しました。グレースフルシャットダウンを開始します...');
+  // 終了前にデータを保存
+  saveRecruitmentData();
+  process.exit(0);
 });
+
 process.on('SIGINT', () => {
-  console.log('SIGINTを受信しました。');
-  gracefulShutdown();
+  console.log('SIGINTを受信しました。グレースフルシャットダウンを開始します...');
+  // 終了前にデータを保存
+  saveRecruitmentData();
+  process.exit(0);
 });
 
-
+// 定期的なヘルスチェックを追加
+// 10分ごとに自己ヘルスチェックを実施
+setInterval(() => {
+  try {
+    // 自己ヘルスチェック - メモリ使用量など
+    const memoryUsage = process.memoryUsage();
+    console.log(`ヘルスチェック: メモリ使用量 ${Math.round(memoryUsage.rss / 1024 / 1024)}MB`);
+    
+    // もしメモリ使用量が基準値を超えた場合は保存して再起動
+    if (memoryUsage.rss > 450 * 1024 * 1024) { // 450MBを超えたら
+      console.log('メモリ使用量が高いため、データを保存して再起動します...');
+      saveRecruitmentData();
+      setTimeout(() => process.exit(1), 1000);
+    }
+  } catch (error) {
+    console.error('ヘルスチェックエラー:', error);
+  }
+}, 10 * 60 * 1000); // 10分ごと
 //==========================================================================
 // テストモード機能ブロック
 //==========================================================================
