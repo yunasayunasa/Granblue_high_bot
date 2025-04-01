@@ -13,6 +13,7 @@ const {
 // 環境変数をロード
 require('dotenv').config();
 
+
 // ★★★ 変更点: fs と path を使う ★★★
 const fs = require('fs');
 const path = require('path');
