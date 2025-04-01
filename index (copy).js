@@ -1728,6 +1728,8 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
     }
   }
 
+  // autoAssignAttributes 関数内の該当部分を置き換え
+
   // 埋まっていない属性を、まだ割り当てられていない参加者で埋める
   const unassignedParticipants = eligibleParticipants.filter(p => !p.assignedAttribute);
   const emptyAttributes = attributes.filter(attr => !assignments[attr]);
@@ -1735,7 +1737,7 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
   console.log(`未割り当て参加者: ${unassignedParticipants.length}名`);
   console.log(`空の属性: [${emptyAttributes.join(', ')}]`);
 
-  // 第1フェーズ: 希望属性が一致する参加者を割り当てる
+  // 希望属性が一致する参加者のみを割り当てる
   for (let i = 0; i < unassignedParticipants.length; i++) {
     if (emptyAttributes.length === 0) break;
     
@@ -1747,7 +1749,7 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
     );
     
     if (matchingAttrs.length > 0) {
-      // 希望属性と一致する場合に割り当てる
+      // 希望属性と一致する場合のみ割り当てる
       const attr = matchingAttrs[0];
       assignments[attr] = participant;
       participant.assignedAttribute = attr;
@@ -1758,31 +1760,27 @@ async function autoAssignAttributes(recruitment, previewOnly = false) {
         emptyAttributes.splice(attrIndex, 1);
       }
       
-      // 処理済みの参加者として記録
-      participant.processed = true;
-      
       console.log(`未割り当て参加者 ${participant.username} を ${attr} に割り当てました (希望一致)`);
+    } else {
+      console.log(`未割り当て参加者 ${participant.username} は希望属性と一致する空き属性がないため、割り当てません`);
     }
   }
-  
-  // 第2フェーズ: それでも残っている属性には希望に関わらず割り当てる（プレビューでない場合）
-  if (!previewOnly && emptyAttributes.length > 0) {
-    // 処理されていない未割り当て参加者を取得
-    const remainingParticipants = unassignedParticipants.filter(p => !p.processed);
-    
-    console.log(`空の属性に割り当て可能な残り参加者: ${remainingParticipants.length}名`);
-    
-    for (let i = 0; i < Math.min(remainingParticipants.length, emptyAttributes.length); i++) {
-      const participant = remainingParticipants[i];
-      const attr = emptyAttributes[i];
-      
-      assignments[attr] = participant;
-      participant.assignedAttribute = attr;
-      
-      console.log(`未割り当て参加者 ${participant.username} を ${attr} に強制割り当てしました (希望外)`);
+
+  // 空属性が残った場合は未定のままにする（希望外には割り当てない）
+  if (emptyAttributes.length > 0) {
+    console.log(`${emptyAttributes.length}個の属性は希望者がいないため未定のままにします: [${emptyAttributes.join(', ')}]`);
+  }
+
+  // 割り当て結果を元の参加者リストに反映
+  for (const participant of recruitment.participants) {
+    const assignedParticipant = eligibleParticipants.find(p => p.userId === participant.userId);
+    if (assignedParticipant && assignedParticipant.assignedAttribute) {
+      participant.assignedAttribute = assignedParticipant.assignedAttribute;
+      console.log(`元のリストで ${participant.username} を ${participant.assignedAttribute} に設定しました (時間枠: ${participant.timeAvailability})`);
+    } else {
+      participant.assignedAttribute = null;
+      console.log(`${participant.username} は割り当てられませんでした`);
     }
-  } else if (previewOnly && emptyAttributes.length > 0) {
-    console.log(`プレビューモードのため、残りの ${emptyAttributes.length} 属性は空のままにします`);
   }
 
   // 割り当て結果を元の参加者リストに反映
