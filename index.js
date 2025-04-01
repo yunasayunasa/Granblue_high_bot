@@ -77,8 +77,20 @@ function loadRecruitmentData() {
     const fs = require('fs');
     const path = require('path');
     
-    // /tmp ディレクトリから読み込み
-    const dataFilePath = path.join('/tmp', 'recruitment_data.json');
+     // --- ▼▼▼ ここから修正 ▼▼▼ ---
+
+    // ★★ Renderで設定したMount Pathに合わせてください ★★
+    const RENDER_DISK_MOUNT_PATH = '/data/botdata'; // 例: Renderで設定したパス
+    const dataFilePath = path.join(RENDER_DISK_MOUNT_PATH, 'recruitment_data.json');
+    const dataDir = path.dirname(dataFilePath); // ディレクトリパスを取得
+
+    // ディレクトリが存在しない場合は作成 (読み込み時には通常不要だが念のため)
+    if (!fs.existsSync(dataDir)) {
+      console.log(`データディレクトリが見つからないため作成します: ${dataDir}`);
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    // --- ▲▲▲ ここまで修正 ▲▲▲ ---
     
     // ファイルが存在するか確認
     if (fs.existsSync(dataFilePath)) {
@@ -158,13 +170,28 @@ client.once('ready', () => {
 
 // 募集データの保存処理
 function saveRecruitmentData() {
+  // activeRecruitments が Map でない場合や空の場合、処理を中断
+  if (!(activeRecruitments instanceof Map) || activeRecruitments.size === 0) {
+    console.log('保存対象のデータがないため、保存処理をスキップします。');
+    return;
+  }
   try {
     // fsモジュールを関数内でrequire
     const fs = require('fs');
     const path = require('path');
     
-    // 書き込み可能な /tmp ディレクトリを使用 (Renderの環境でも書き込み可能)
-    const dataFilePath = path.join('/tmp', 'recruitment_data.json');
+    // --- ▼▼▼ ここから修正 ▼▼▼ ---
+
+    // ★★ Renderで設定したMount Pathに合わせてください ★★
+    const RENDER_DISK_MOUNT_PATH = '/data/botdata'; // 例: Renderで設定したパス
+    const dataFilePath = path.join(RENDER_DISK_MOUNT_PATH, 'recruitment_data.json');
+    const dataDir = path.dirname(dataFilePath); // ディレクトリパスを取得
+
+    // 保存前にディレクトリが存在するか確認し、なければ作成
+    if (!fs.existsSync(dataDir)) {
+      console.log(`データディレクトリが見つからないため作成します: ${dataDir}`);
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
     
     // MapをJSONに変換可能なオブジェクトに変換
     const dataToSave = {};
